@@ -1,0 +1,14 @@
+# Ignore data directory
+FisherInformation/data/
+
+# Ignore all files in heatmaps directory except 'video'
+FisherInformation/heatmaps/
+
+__pycache__/
+
+.vscode
+**/.DS_Store
+
+**/data/*
+
+**/__pycache__/
