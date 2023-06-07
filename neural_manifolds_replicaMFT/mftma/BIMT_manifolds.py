@@ -36,9 +36,9 @@ with torch.no_grad():
         train_dataset, sampled_per_class, examples_per_class, seed=0)
 
 json_file = json.load(
-    open('neural_manifolds_replicaMFT/mftma/results/vanilla.json', 'r'))
+    open('neural_manifolds_replicaMFT/mftma/results/l1.json', 'r'))
 
-for indx, model_name in enumerate(os.listdir('/Users/maxpowers/Library/Mobile Documents/com~apple~CloudDocs/MSc Thesis/Thesis.nosync/neural_manifolds_replicaMFT/mftma/models/vanilla_cnn')):
+for indx, model_name in enumerate(os.listdir('/Users/maxpowers/Library/Mobile Documents/com~apple~CloudDocs/MSc Thesis/Thesis.nosync/neural_manifolds_replicaMFT/mftma/models/l1_cnn')):
     if (w := model_name.split('-')[0]) in json_file.keys():
         continue
     print(f'Currently analysing model after {model_name} steps:')
@@ -46,7 +46,7 @@ for indx, model_name in enumerate(os.listdir('/Users/maxpowers/Library/Mobile Do
 
     model = BioMLP2D(shp=[784, 100, 100, 10])
     model.load_state_dict(torch.load(
-        '/Users/maxpowers/Library/Mobile Documents/com~apple~CloudDocs/MSc Thesis/Thesis.nosync/neural_manifolds_replicaMFT/mftma/models/vanilla_cnn/{}'.format(model_name), map_location=torch.device('cpu')))
+        '/Users/maxpowers/Library/Mobile Documents/com~apple~CloudDocs/MSc Thesis/Thesis.nosync/neural_manifolds_replicaMFT/mftma/models/l1_cnn/{}'.format(model_name), map_location=torch.device('cpu')))
     activations = extractor(model, data_full, layer_nums=[1, 2, 3])
     for layer, data, in activations.items():
         X = [d.reshape(d.shape[0], -1).T for d in data]
@@ -92,4 +92,4 @@ for indx, model_name in enumerate(os.listdir('/Users/maxpowers/Library/Mobile Do
     json_file[model_num] = tmp_dict
 
     json.dump(json_file, open(
-        'neural_manifolds_replicaMFT/mftma/results/vanilla.json', 'w'))
+        'neural_manifolds_replicaMFT/mftma/results/l1.json', 'w'))
