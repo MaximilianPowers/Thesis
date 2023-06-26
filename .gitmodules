@@ -1,3 +1,6 @@
 [submodule "updown"]
 	path = updown
 	url = https://github.com/rytheranderson/updown
+[submodule "disentangling-vae"]
+	path = disentangling-vae
+	url = https://github.com/YannDubs/disentangling-vae
