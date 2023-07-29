@@ -16,5 +16,23 @@
         "log_interval": 100,
         "save_interval": 100,
         "fig_interval": 50
+    },
+    "1": {
+        "n_samples": 200,
+        "n_samples_test": 200,
+        "noise": 0.05,
+        "n_features": 2,
+        "input_dim": 2,
+        "width": 20,
+        "depth": 2,
+        "output_dim": 2,
+        "lr": 0.002,
+        "epochs": 10000,
+        "lamb": 0.001,
+        "swap_interval": 1000,
+        "scheduler": "custom",
+        "log_interval": 100,
+        "save_interval": 100,
+        "fig_interval": 50
     }
 }

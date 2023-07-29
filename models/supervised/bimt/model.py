@@ -55,7 +55,7 @@ class BioMLP(nn.Module):
 
             else:
                 linear_list.append(BioLinear(shp[i], shp[i+1]))
-        self.linears = nn.ModuleList(linear_list)
+        self.layers = nn.ModuleList(linear_list)
 
         if token_embedding == True:
             # embedding size: number of tokens * embedding dimension
@@ -66,45 +66,58 @@ class BioMLP(nn.Module):
         # parameters for the bio-inspired trick
         self.l0 = 0.2  # distance between two nearby layers
         self.in_perm = torch.nn.Parameter(torch.tensor(
-            np.arange(int(self.in_dim/self.linears[0].in_fold)), dtype=torch.float))
-        # self.register_parameter(name='in_perm', param=torch.nn.Parameter(torch.tensor(np.arange(int(self.in_dim/self.linears[0].in_fold)), dtype=torch.float)))
+            np.arange(int(self.in_dim/self.layers[0].in_fold)), dtype=torch.float))
+        # self.register_parameter(name='in_perm', param=torch.nn.Parameter(torch.tensor(np.arange(int(self.in_dim/self.layers[0].in_fold)), dtype=torch.float)))
         self.out_perm = torch.nn.Parameter(torch.tensor(
-            np.arange(int(self.out_dim/self.linears[-1].out_fold)), dtype=torch.float))
-        # self.register_parameter(name='out_perm', param=torch.nn.Parameter(torch.tensor(np.arange(int(self.out_dim/self.linears[-1].out_fold)), dtype=torch.float)))
+            np.arange(int(self.out_dim/self.layers[-1].out_fold)), dtype=torch.float))
+        # self.register_parameter(name='out_perm', param=torch.nn.Parameter(torch.tensor(np.arange(int(self.out_dim/self.layers[-1].out_fold)), dtype=torch.float)))
         self.top_k = 10
         self.token_embedding = token_embedding
         self.n_parameters = sum(p.numel() for p in self.parameters())
         self.original_params = None
 
-    def forward(self, x):
+    def init_forward(self):
+        self.activations = []
+
+    def save_forward(self, coordinates):
+        self.activations.append(coordinates)
+
+    def forward(self, x, save_activations=False):
+        if save_activations:
+            self.init_forward()
+            self.save_forward(x)
+
         shp = x.shape
-        in_fold = self.linears[0].in_fold
+        in_fold = self.layers[0].in_fold
         x = x.reshape(shp[0], in_fold, int(shp[1]/in_fold))
         x = x[:, :, self.in_perm.long()]
         x = x.reshape(shp[0], shp[1])
         f = torch.nn.SiLU()
         for i in range(self.depth-1):
-            x = f(self.linears[i](x))
-        x = self.linears[-1](x)
+            x = f(self.layers[i](x))
+            if save_activations:
+                self.save_forward(x)
+        x = self.layers[-1](x)
 
         out_perm_inv = torch.zeros(self.out_dim, dtype=torch.long)
         out_perm_inv[self.out_perm.long()] = torch.arange(self.out_dim)
         x = x[:, out_perm_inv]
         # x = x[:,self.out_perm]
-
+        if save_activations:
+            self.save_forward(x)
         return x
 
     def get_linear_layers(self):
-        return self.linears
+        return self.layers
 
     def get_cc(self, weight_factor=1.0, bias_penalize=True, no_penalize_last=False):
         # compute connection cost
         cc = 0
-        num_linear = len(self.linears)
+        num_linear = len(self.layers)
         for i in range(num_linear):
             if i == num_linear - 1 and no_penalize_last:
                 weight_factor = 0.
-            biolinear = self.linears[i]
+            biolinear = self.layers[i]
             dist = torch.abs(biolinear.out_coordinates.unsqueeze(
                 dim=1) - biolinear.in_coordinates.unsqueeze(dim=0))
             cc += torch.sum(torch.abs(biolinear.linear.weight)
@@ -231,7 +244,7 @@ class BioMLP(nn.Module):
         for j in range(len(shp)):
             N = shp[j]
             if j == 0:
-                in_fold = self.linears[j].in_fold
+                in_fold = self.layers[j].in_fold
                 N = int(N/in_fold)
             for i in range(N):
                 if j == 0:
@@ -248,7 +261,7 @@ class BioMLP(nn.Module):
         plt.ylim(-0.02, 0.1*(len(shp)-1)+0.02)
         plt.xlim(-0.02, 1.02)
 
-        linears = self.linears
+        linears = self.layers
         for ii in range(len(linears)):
             biolinear = linears[ii]
             p = biolinear.linear.weight
@@ -286,9 +299,9 @@ class BioMLP(nn.Module):
                                     for param in self.parameters()]
         with torch.no_grad():
             if ptype == "weight":
-                self.linears[i].linear.weight[pos] = value
+                self.layers[i].linear.weight[pos] = value
             elif ptype == "bias":
-                self.linears[i].linear.bias[pos] = value
+                self.layers[i].linear.bias[pos] = value
 
     def revert(self):
         with torch.no_grad():

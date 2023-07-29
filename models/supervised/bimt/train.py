@@ -30,8 +30,8 @@ else:
 parser = argparse.ArgumentParser()
 
 # Data related arguments
-parser.add_argument('--n_samples', type=int, default=1000, help='Number of samples to generate')
-parser.add_argument('--n_samples_test', type=int, default=1000, help='Number of samples to generate for testing')
+parser.add_argument('--n_samples', type=int, default=200, help='Number of samples to generate')
+parser.add_argument('--n_samples_test', type=int, default=200, help='Number of samples to generate for testing')
 parser.add_argument('--noise', type=float, default=0.05, help='Noise level of the data')
 parser.add_argument('--n_features', type=int, default=2, help='Number of features to generate')
 
@@ -45,7 +45,7 @@ parser.add_argument('--output_dim', type=int, default=2, help='Output dimension 
 parser.add_argument('--lr', type=float, default=0.002, help='Learning rate')
 parser.add_argument('--epochs', type=int, default=10000, help='Number of epochs to train')
 parser.add_argument('--lamb', type=int, default=0.001, help='Regularisation parameter')
-parser.add_argument('--swap_interval', type=int, default=200, help='Run swapping check every .. epochs')
+parser.add_argument('--swap_interval', type=int, default=1000, help='Run swapping check every .. epochs')
 parser.add_argument('--scheduler', type=str, default='custom', help='Use a scheduler for the learning rate')
 
 # Misc arguments
