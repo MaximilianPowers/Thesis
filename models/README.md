@@ -1,6 +1,8 @@
 ## MODEL SPECS
 
-Models are separated into two types: unsupervised vs. supervised. Within each of these two folders, there are various PyTorch models, such as classical multi-layered perceptrons, a CNN etc. The only abstract constraint placed on models is that their layers, `model.layer` , is stored as a `nn.ModuleList` so that their forward passes can be saved when `save_activations=True`. 
+Models are separated into two types: unsupervised vs. supervised. Within each of these two folders, there are various PyTorch models, such as classical multi-layered perceptrons, a CNN etc. 
+
+We've placed an abstract constraint for each model that every `forward` function has a `save_activations` boolean input. When a forward pass has `save_activations=True`, `save_forward` and `init_forward` are called to store the output at each `layer`. When adding a new model to run the various metrics on, store linears layers in a `nn.ModuleList` as `self.layers`. 
 
 For each model folder we have the following:
 
