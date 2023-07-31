@@ -147,7 +147,7 @@ for epoch in range(EPOCHS):
             csv_writer.writerow(log_store)
          
     if epoch % SAVE_INTERVAL == 0:
-        torch.save(model.state_dict(), f'./saved_models/{save_model_indx}/model_{epoch}.pt')
+        torch.save(model, f'./saved_models/{save_model_indx}/model_{epoch}.pt')
         
     if epoch % FIG_INTERVAL == 0:
         plt.figure(figsize=(3, 7)) 
