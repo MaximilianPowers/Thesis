@@ -2,7 +2,9 @@ __pycache__
 */__pycache__
 
 data/*
-
+/models/*/*/saved_models/*
+/models/*/*/figures/*
+/models/*/*/logs/*
 
 
 .vscode
@@ -14,3 +16,4 @@ data/*
 */.gitattributes
 */.gitmodules
 */.
+

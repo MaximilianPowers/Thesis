@@ -48,14 +48,14 @@ parser.add_argument('--continuous', default=True, help='data is continuous',
 					action='store_true')
 # Model related arguments
 
-parser.add_argument('--hidden-size', type=int, default=200, metavar='N',
+parser.add_argument('--hidden-size', type=int, default=100, metavar='N',
 					help='dimension of hidden layer')
-parser.add_argument('--w-size', type=int, default=20, metavar='N',
+parser.add_argument('--w-size', type=int, default=16, metavar='N',
 					help='dimension of latent variable')
 
 # Training related arguments
 
-parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+parser.add_argument('--batch-size', type=int, default=512, metavar='N',
 					help='input batch size for training (default: 128)')
 parser.add_argument('--epochs', type=int, default=200, metavar='N',
 					help='number of epochs to train (default: 10)')
@@ -73,7 +73,7 @@ if args.dataset not in supported_datasets:
 
 if args.dataset == 'toy':
     means = torch.tensor([[1, 1], [1, -1], [-1, -1], [-1, 1]], dtype=torch.float32)
-    covariances = 0.1*torch.stack([torch.eye(2), torch.eye(2), torch.eye(2), torch.eye(2)])
+    covariances = 0.01*torch.stack([torch.eye(2), torch.eye(2), torch.eye(2), torch.eye(2)])
     dataset = MixtureOfGaussiansDataset(means, covariances, args.n_samples)
     test_dataset = MixtureOfGaussiansDataset(means, covariances, args.n_samples_test)       
     train_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
@@ -180,7 +180,7 @@ def loss_function(recon_X, X, mu_w, logvar_w, qz,
 	return loss, recon_loss, KLD_W, KLD_Z, E_KLD_QX_PX, CV
 
 def train(epoch):
-    lambda_ = min(1, epoch/50)
+    lambda_ = min(0.5, epoch/1000)
     gmvae.train()
     store_batch = torch.randint(0, len(train_loader), (1,))
     for batch_idx, (data, target) in enumerate(train_loader):
