@@ -49,5 +49,9 @@ class MLP(nn.Module):
             if save_jacobians:
                 self.save_jacobians(x, layer)
             x = layer.forward(x)
+        if save_activations:
+            self.save_forward(x)
+        if save_jacobians:
+            self.save_jacobians(x, layer)
 
         return x

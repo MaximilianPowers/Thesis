@@ -46,6 +46,10 @@ def plot_points(Net, plots: figure, cls_a: ndarray, cls_b: ndarray, plot_classif
     act_cls1 = Net.activations
     Net.forward(b, save_activations=True)
     act_cls2 = Net.activations
+    if act_cls1[-1].shape[1] == 1:
+        act_cls1 = act_cls1[:-1]
+        act_cls2 = act_cls2[:-1]
+
     for ln, layer_activations in enumerate(zip(act_cls1, act_cls2)):
         plot = plots[ln]
         cls1, cls2 = map(lambda t: t.detach().numpy(), layer_activations)
@@ -73,7 +77,12 @@ def plot_grids(Net, plots: figure, xmin, xmax, grid_dim_x: int, grid_dim_y: int,
     # forward pass grid points
     Net.forward(grid_tensor, save_activations=True)
     plot_grid(grid_x, grid_y, ax=plots[0], color="lightgrey")
-    for e, grid in enumerate(Net.activations):
+    activations = Net.activations
+
+    if activations[-1].shape[1] == 1:
+        activations = activations[:-1]
+
+    for e, grid in enumerate(activations):
         plot = plots[e]
         grid = grid.detach().numpy()
         xx = grid.T.reshape(2, grid_dim_x, grid_dim_y)[0]
@@ -94,7 +103,11 @@ def plot_tensors(Net, plots: figure, grid_numpy_array: ndarray, grid_tensor: tor
         g = RiemannianMetric()
         g_numpy = g.matrix
         iter_jacobi = reversed(Net.jacobians)
-        for en, layer in enumerate(zip_longest(reversed(Net.activations), reversed(plots),
+        activations = Net.activations
+        if activations[-1].shape[1] == 1:
+            activations = activations[:-1]
+
+        for en, layer in enumerate(zip_longest(reversed(activations), reversed(plots),
                                                fillvalue=torch.from_numpy(grid_point))):
             point, plot = layer
             x, y = point.detach().numpy()
