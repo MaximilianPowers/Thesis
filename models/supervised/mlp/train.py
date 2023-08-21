@@ -4,6 +4,7 @@ import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from models.data.sklearn_datasets import MoonDataset, SpiralDataset, BlobsDataset, CirclesDataset
+from models.data.regression_datasets import SinusoidalRegression
 from models.supervised.mlp.model import MLP
 import os
 import glob
@@ -36,7 +37,7 @@ def train(model, loader, criterion, optimizer, device):
 
 
 def main(args):
-    cur_dir = "./models/supervised/mlp/saved_models/vanilla"
+    cur_dir = "./models/supervised/mlp/saved_models/2_wide"
 
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -51,6 +52,8 @@ def main(args):
         dataset = BlobsDataset(n_samples=args.n_samples, noise=args.noise)
     elif args.dataset == 'circles':
         dataset = CirclesDataset(n_samples=args.n_samples, noise=args.noise)
+    elif args.dataset == 'sinusoidal':
+        dataset = SinusoidalRegression(n_samples=args.n_samples, noise=args.noise)
     else:
         raise ValueError("Dataset not supported.")
 
@@ -66,7 +69,10 @@ def main(args):
 
     model = MLP(input_dim=args.input_dim, output_dim=args.output_dim, num_layers=args.num_layers,
                       layer_width=args.layer_width).to(device)
-    criterion = nn.BCELoss()
+    if args.dataset == 'sinusoidal':
+        criterion = nn.MSELoss()
+    else:
+        criterion = nn.BCELoss()
     optimizer = optim.Adam(
         model.parameters(), lr=args.learning_rate)
 
@@ -86,11 +92,11 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--learning_rate', type=float, default=0.01)
     parser.add_argument('--num_layers', type=int, default=7)
-    parser.add_argument('--layer_width', type=int, default=10)
-    parser.add_argument('--output_dim', type=int, default=2)
+    parser.add_argument('--layer_width', type=int, default=2)
+    parser.add_argument('--output_dim', type=int, default=1)
     parser.add_argument('--input_dim', type=int, default=2)
     parser.add_argument('--n_samples', type=int, default=1000)
-    parser.add_argument('--dataset', type=str, default='moon')
+    parser.add_argument('--dataset', type=str, default='sinusoidal')
     parser.add_argument('--noise', type=float, default=0.01)
     parser.add_argument('--length', type=float, default=2*pi)
     parser.add_argument('--seed', type=int, default=3)

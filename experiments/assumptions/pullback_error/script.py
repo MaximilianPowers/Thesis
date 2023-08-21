@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import torch
 
 
+
 def iter_riemann_comp(model, activations, N=50):    
     g = [0 for activation in activations]
     for indx, activation in enumerate(activations):
