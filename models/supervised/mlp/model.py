@@ -33,6 +33,9 @@ class MLP(nn.Module):
         self.activations = []
         self.jacobians = []
 
+    def get_activations(self):
+        return self.activations
+    
     def save_forward(self, coordinates):
         self.activations.append(coordinates)
 
@@ -54,4 +57,11 @@ class MLP(nn.Module):
         if save_jacobians:
             self.save_jacobians(x, layer)
 
+        return x
+
+    def forward_layers(self, x, indx):
+        # Go forward layers starting at indx, used for pullback metric mapping
+        assert indx < self.num_layers
+        for layer in self.layers[indx:]:
+            x = layer.forward(x)
         return x
