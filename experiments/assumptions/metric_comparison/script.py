@@ -1,25 +1,11 @@
-from torch.func import vmap, jacfwd, jacrev
 import numpy as np
 from riemannian_geometry.computations.riemann_metric import LocalDiagPCA
+from riemannian_geometry.computations.pullback_metric import compute_jacobian_multi_layer
 import matplotlib.pyplot as plt
 import torch
 from matplotlib.patches import Ellipse
+from utils.plotting.mesh import generate_lattice
 
-
-
-def generate_lattice(data, N, padding=0.5):
-    D = data.shape[1]  # Dimensionality of the data
-    mins = data.min(axis=0) - padding
-    maxs = data.max(axis=0) + padding
-
-    # Generate lattice points for each dimension
-    lattice_points = [np.linspace(mins[d], maxs[d], N) for d in range(D)]
-    
-    # Generate meshgrid
-    mesh = np.meshgrid(*lattice_points)
-    
-    # Reshape and stack
-    return np.vstack([m.ravel() for m in mesh]).T
 
 
 
@@ -163,22 +149,6 @@ def plot_lattice(ax, activation, labels, xy_grid, metric_layer, layer, N=15):
     return eigenvalues
 
 
-def compute_jacobian_layer(model, X, layer_indx):
-    dim_in = model.layers[layer_indx].in_features
-    dim_out = model.layers[layer_indx].out_features
-    print(X.shape)
-    if dim_out >= dim_in:
-        jacobian = vmap(jacfwd(model.layers[layer_indx].forward))(X)
-    else:
-        jacobian = vmap(jacrev(model.layers[layer_indx].forward))(X)
-    return jacobian
-
-def compute_jacobian_multi_layer(layer_func, X, dim_in, dim_out):
-    if dim_out >= dim_in:
-        jacobian = vmap(jacfwd(layer_func))(X)
-    else:
-        jacobian = vmap(jacrev(layer_func))(X)
-    return jacobian
 
 
 def pullback_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='lattice'):
@@ -198,8 +168,10 @@ def pullback_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='latti
     model.forward(xy_grid_tensor, save_activations=True)
     surface = model.get_activations()
     surface_np = [activation.detach().numpy() for activation in surface]
-
-    g[-1] = np.array([np.diagflat(manifold.metric_tensor(coord.reshape(-1, 1))[0]) for coord in surface_np[-1]])
+    arr = manifold.metric_tensor(surface_np[-1].transpose())
+    _, D = arr.shape
+    diagonal_matrices = np.eye(D)[None, :, :]  # Add an extra dimension for broadcasting
+    g[-1] = arr[:, :, None] * diagonal_matrices
 
     if plot_method == 'lattice':
         fig, ax = plt.subplots(2, N_layers, figsize=(N_layers * 16, 8*2))
@@ -271,8 +243,11 @@ def full_pullback_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='
     model.forward(xy_grid_tensor, save_activations=True)
     surface = model.get_activations()
     surface_np = [activation.detach().numpy() for activation in surface]
-
-    g[-1] = np.array([np.diagflat(manifold.metric_tensor(coord.reshape(-1, 1))[0]) for coord in surface_np[-1]])
+    
+    arr = manifold.metric_tensor(surface_np[-1].transpose())
+    _, D = arr.shape
+    diagonal_matrices = np.eye(D)[None, :, :]  # Add an extra dimension for broadcasting
+    g[-1] = arr[:, :, None] * diagonal_matrices
 
     if plot_method == 'lattice':
         fig, ax = plt.subplots(2, N_layers, figsize=(N_layers * 16, 8*2))
@@ -342,8 +317,11 @@ def local_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='lattice'
     surface = model.get_activations()
     surface_np = [activation.detach().numpy() for activation in surface]
 
-    g[0] = np.array([np.diagflat(manifold.metric_tensor(coord.reshape(-1, 1))[0]) for coord in surface_np[-1]])
-
+    arr = manifold.metric_tensor(surface_np[-1].transpose())
+    _, D= arr.shape
+    diagonal_matrices = np.eye(D)[None, :, :]  # Add an extra dimension for broadcasting
+    g[0] = arr[:, :, None] * diagonal_matrices
+    
     if plot_method == 'lattice':
         fig, ax = plt.subplots(2, N_layers, figsize=(N_layers * 16, 8*2))
         plot_lattice(ax, activations_np[0], labels, xy_grid, g[0], 0, N=N)    
@@ -369,12 +347,19 @@ def local_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='lattice'
             
             model.forward(xy_grid_tensor, save_activations=True).detach().numpy()
             xy_grid_tmp = model.get_activations()[indx].detach().numpy()
-            g[indx] = np.array([np.diagflat(manifold.metric_tensor(coord.reshape(-1, 1))[0]) for coord in xy_grid_tmp])
+        
+            arr = manifold.metric_tensor(xy_grid_tmp.transpose())
+            _, D= arr.shape
+            diagonal_matrices = np.eye(D)[None, :, :]  # Add an extra dimension for broadcasting
+            g[indx] = arr[:, :, None] * diagonal_matrices
             
         elif plot_method == 'surface':
             xy_grid = surface_np[indx]
 
-            g[indx] = np.array([np.diagflat(manifold.metric_tensor(coord.reshape(-1, 1))[0]) for coord in xy_grid])
+            arr = manifold.metric_tensor(xy_grid.transpose())
+            _, D= arr.shape
+            diagonal_matrices = np.eye(D)[None, :, :]  # Add an extra dimension for broadcasting
+            g[indx] = arr[:, :, None] * diagonal_matrices
 
         
         
@@ -400,31 +385,7 @@ def local_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='lattice'
 
 
     
-def compute_cosine_score(g_1, g_2, tol=1e-5):
-    cosine_scores = []
-    for layer_g, layer_gN in zip(g_1, g_2):
-        layer_g = np.diagonal(layer_g, axis1=1, axis2=2).copy()
-        layer_gN = np.diagonal(layer_gN, axis1=1, axis2=2).copy()
 
-        similarities = []
-        for metric_g, metric_gN in zip(layer_g, layer_gN):
-            norm_g = metric_g / (np.linalg.norm(metric_g) + 1e-10)
-            norm_gN = metric_gN / (np.linalg.norm(metric_gN) + 1e-10)
-            if max(norm_g) < tol or max(norm_gN) < tol:
-                similarities.append(1)
-                continue
-            similarity = np.dot(norm_g, norm_gN) / (np.linalg.norm(norm_g) * np.linalg.norm(norm_gN))
-            similarities.append(similarity)
-        cosine_scores.append(similarities)
-    return cosine_scores
-
-def compute_magnitude_score(g_1, g_2):
-    scorings = []
-    for g_left, g_right in zip(g_1, g_2):
-        norm_1 = np.linalg.norm(g_left, axis=(1,2))
-        norm_2 = np.linalg.norm(g_right, axis=(1,2))
-        scorings.append(np.abs(norm_1 - norm_2)/np.max([norm_1, norm_2], axis=0))
-    return scorings
 
 def violin_plot(cosine_scores, magnitude_scores, save_name=None, epoch=0):
 
