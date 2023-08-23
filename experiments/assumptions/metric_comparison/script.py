@@ -218,7 +218,8 @@ def pullback_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='latti
     
     final_layer_metric_tensor = torch.from_numpy(g[-1]).float()
     dim_out = model.layers[-1].out_features
-    store_plot_grids = [xy_grid]
+    store_plot_grids = [_ for _ in activations_np]
+    store_plot_grids[-1] = xy_grid
     for indx in reversed(range(0, N_layers-1)):
         def forward_layers(x):
             return model.forward_layers(x, indx)
@@ -242,12 +243,13 @@ def pullback_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='latti
             plot_lattice_diagonal(ax, activations_np[indx], labels, xy_grid, g[indx], indx, N=N)
         elif plot_method == 'surface':
             plot_surface(ax, activations_np[indx], labels, xy_grid, g[indx], indx, N=N)
-        store_plot_grids.append(xy_grid)
+        store_plot_grids[indx] = xy_grid
+
 
     if save_path is None:
         fig.savefig(f"figures/{epoch}/pullback_{plot_method}.png")
     else:
-        fig.savefig(f"figures/{epoch}/pullback_{plot_method}_{save_path}.png")
+        fig.savefig(f"figures/{epoch}/{save_path}/pullback_{plot_method}.png")
 
     plt.close()
     return g, store_plot_grids
@@ -286,7 +288,8 @@ def full_pullback_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='
     
     else:
         raise ValueError(f'Plot method {plot_method} not recognised. Please use either lattice or surface.')
-    store_plot_grids = [xy_grid]
+    store_plot_grids = [_ for _ in activations_np]
+    store_plot_grids[-1] = xy_grid
     final_layer_metric_tensor = torch.from_numpy(g[-1]).float()
     dim_out = model.layers[-1].out_features
     for indx in reversed(range(0, N_layers-1)):
@@ -311,11 +314,12 @@ def full_pullback_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='
             plot_lattice_diagonal(ax, activations_np[indx], labels, xy_grid, g[indx], indx, N=N)
         elif plot_method == 'surface':
             plot_surface(ax, activations_np[indx], labels, xy_grid, g[indx], indx, N=N)
-        store_plot_grids.append(xy_grid)
+        store_plot_grids[indx] = xy_grid
+
     if save_path is None:
         fig.savefig(f"figures/{epoch}/full_pullback_{plot_method}.png")
     else:
-        fig.savefig(f"figures/{epoch}/full_pullback_{plot_method}_{save_path}.png")
+        fig.savefig(f"figures/{epoch}/{save_path}/full_pullback_{plot_method}.png")
 
     plt.close()
     return g, store_plot_grids
@@ -354,7 +358,8 @@ def local_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='lattice'
     
     else:
         raise ValueError(f'Plot method {plot_method} not recognised. Please use either lattice or surface.')
-    store_plot_grids = [xy_grid]
+    store_plot_grids = [_ for _ in activations_np]
+    store_plot_grids[0] = xy_grid
     for indx in reversed(range(1, N_layers)):
         manifold = LocalDiagPCA(activations_np[indx], sigma=0.05, rho=1e-3)
     
@@ -362,7 +367,8 @@ def local_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='lattice'
             xy_grid = generate_lattice(activations_np[indx], N)
             xy_grid_tensor = torch.from_numpy(xy_grid).float()
             
-            xy_grid_tmp = model.forward_layer(xy_grid_tensor, save_activations=True).detach().numpy()
+            model.forward(xy_grid_tensor, save_activations=True).detach().numpy()
+            xy_grid_tmp = model.get_activations()[indx].detach().numpy()
             g[indx] = np.array([np.diagflat(manifold.metric_tensor(coord.reshape(-1, 1))[0]) for coord in xy_grid_tmp])
             
         elif plot_method == 'surface':
@@ -378,12 +384,12 @@ def local_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='lattice'
             plot_lattice_diagonal(ax, activations_np[indx], labels, xy_grid, g[indx], indx, N=N)
         elif plot_method == 'surface':
             plot_surface(ax, activations_np[indx], labels, xy_grid, g[indx], indx, N=N)
-        store_plot_grids.append(xy_grid)
+        store_plot_grids[indx] = xy_grid
 
     if save_path is None:
         fig.savefig(f"figures/{epoch}/local_{plot_method}.png")
     else:
-        fig.savefig(f"figures/{epoch}/local_{plot_method}_{save_path}.png")
+        fig.savefig(f"figures/{epoch}/{save_path}/local_{plot_method}.png")
 
     plt.close()
     return g, store_plot_grids
@@ -412,40 +418,69 @@ def compute_cosine_score(g_1, g_2, tol=1e-5):
         cosine_scores.append(similarities)
     return cosine_scores
 
-def violin_plot(cosine_scores, save_name=None, epoch=0):
-    plt.violinplot(cosine_scores, showmeans=True, showmedians=True)
-    plt.xlabel('Layer Index')
-    plt.ylabel('Cosine Similarity')
-    plt.title('Distribution of Cosine Similarity of Riemannian Metrics by Layer')
+def compute_magnitude_score(g_1, g_2):
+    scorings = []
+    for g_left, g_right in zip(g_1, g_2):
+        norm_1 = np.linalg.norm(g_left, axis=(1,2))
+        norm_2 = np.linalg.norm(g_right, axis=(1,2))
+        scorings.append(np.abs(norm_1 - norm_2)/np.max([norm_1, norm_2], axis=0))
+    return scorings
+
+def violin_plot(cosine_scores, magnitude_scores, save_name=None, epoch=0):
+
+    fig, ax = plt.subplots(1, 2, figsize=(16*2, 16))
+
+    ax[0].violinplot(cosine_scores, showmeans=True, showmedians=True)
+    ax[0].set_xlabel('Layer Index')
+    ax[0].set_ylabel('Cosine Similarity')
+    ax[0].set_title('Distribution of Cosine Similarity of Riemannian Metrics by Layer')
+
+    ax[1].violinplot(magnitude_scores, showmeans=True, showmedians=True)
+    ax[1].set_xlabel('Layer Index')
+    ax[1].set_ylabel('Magnitude Difference')
+    ax[1].set_title('Distribution of Magnitude Difference of Riemannian Metrics by Layer')
 
     plt.tight_layout()
     plt.grid(axis='y')
     if save_name is not None:
-        plt.savefig(f"figures/{epoch}/violin_plot_{save_name}.png")
+        plt.savefig(f"figures/{epoch}/{save_name}/violin_plot.png")
     else:
         plt.savefig(f"figures/{epoch}/violin_plot.png")
     plt.close()
     
 
-def plot_err_heatmap(cosine_scores, xy_grids, N=50, save_name=None, epoch=0):
-    fig, ax = plt.subplots(1, len(cosine_scores), figsize=(15*len(cosine_scores), 15))
-
+def plot_err_heatmap(cosine_scores, magnitude_scores, xy_grids, model, X, y, N=50, save_name=None, epoch=0):
+    fig, ax = plt.subplots(2, len(cosine_scores), figsize=(16*len(cosine_scores), 16))
+    X = torch.from_numpy(X).float()
+    model.forward(X, save_activations=True)
     for indx, scores in enumerate(cosine_scores):
         x_min, x_max = xy_grids[indx][:, 0].min(), xy_grids[indx][:, 0].max()
         y_min, y_max = xy_grids[indx][:, 1].min(), xy_grids[indx][:, 1].max()
         xx, yy = np.meshgrid(np.linspace(x_min, x_max, N), np.linspace(y_min, y_max, N))
         output = np.array(scores).reshape(xx.shape)
-        contour = ax[indx].contourf(xx, yy, output, alpha=0.4, cmap="RdBu_r")
+        contour = ax[0][indx].contourf(xx, yy, output, alpha=0.4, cmap="RdBu_r")
+        ax[0][indx].scatter(model.activations[indx].detach().numpy()[:, 0], model.activations[indx].detach().numpy()[:, 1], c=y, s=20, edgecolor='k')
+        ax[0][indx].set_xlim(xx.min(), xx.max())
+        ax[0][indx].set_ylim(yy.min(), yy.max())
+        ax[0][indx].set_title(f'Cosine Difference between Two Pullback Metrics - Layer {indx+1}')
+        plt.colorbar(contour)
 
-        ax[indx].set_xlim(xx.min(), xx.max())
-        ax[indx].set_ylim(yy.min(), yy.max())
+        output = np.array(magnitude_scores[indx]).reshape(xx.shape)
+        contour = ax[1][indx].contourf(xx, yy, output, alpha=0.4, cmap="RdBu_r")
+        ax[1][indx].scatter(model.activations[indx].detach().numpy()[:, 0], model.activations[indx].detach().numpy()[:, 1], c=y, s=20, edgecolor='k')
+        ax[1][indx].set_xlim(xx.min(), xx.max())
+        ax[1][indx].set_ylim(yy.min(), yy.max())
+        ax[1][indx].set_title(f'Magnitude Difference between Two Pullback Metrics - Layer {indx+1}')
+        plt.colorbar(contour)
+        
+
 
         fig.canvas.draw()
-        plt.colorbar(contour)
     if save_name is not None:
-        fig.savefig(f"figures/{epoch}/err_heatmap_{save_name}.png")
+        fig.savefig(f"figures/{epoch}/{save_name}/err_heatmap.png")
     else:
         fig.savefig(f"figures/{epoch}/err_heatmap.png")
+    plt.close()
 
 
 
