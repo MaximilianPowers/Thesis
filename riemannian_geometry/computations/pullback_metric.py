@@ -75,3 +75,4 @@ def pullback_metric_surface(model, X, N=50, method="layer_wise"):
 
 
     return g, store_plot_grids
+
