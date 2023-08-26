@@ -60,7 +60,6 @@ def sample_layers(activations, k_neighbours=5, num_samples=1000):
     sampled_activations = [0 for _ in range(len(activations))]
     if activations[-1].shape[1] == 1:
         activations = activations[:-1]
-
     for indx, activation in enumerate(activations):
         points = activation.detach().numpy()
         new_points = sample_points_heat_kernel(points, k_neighbors=k_neighbours, num_samples=num_samples)

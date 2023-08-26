@@ -76,7 +76,7 @@ def christoffel_diagonal_metric(g, dg):
     """
     D,  = g.shape
     Gamma = np.zeros((D, D, D))
-    g_inv = 1/g
+    g_inv = 1/(g+1e-5)
 
     for t in range(D ** 3):
         k = t % D
@@ -139,7 +139,7 @@ def ricci_tensor(R_m):
     return np.einsum('ijkl->ik', R_m)
 
 def scalar_curvature(g, R_c):
-    g_inv = np.diag(1/g)
+    g_inv = np.diag(1/(g + 1e-5))
     return np.einsum('ij,ij->', g_inv, R_c)
 
 def curvature(g, dg, ddg, Gamma):
