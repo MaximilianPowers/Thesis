@@ -35,3 +35,15 @@ def compute_magnitude_score(g_1, g_2):
         norm_2 = np.linalg.norm(g_right, axis=(1,2))
         scorings.append(np.abs(norm_1 - norm_2)/np.max([norm_1, norm_2], axis=0))
     return scorings
+
+def z_normalise(numpy_batch):
+    # Get the number of dimensions for the tensor (excluding the batch dimension)
+    k = len(numpy_batch.shape) - 1
+    
+    # Calculate the mean and standard deviation along the specified axes
+    mean_val = np.mean(numpy_batch, axis=tuple(range(1, 1 + k)), keepdims=True)
+    std_val = np.std(numpy_batch, axis=tuple(range(1, 1 + k)), keepdims=True)
+    
+    # Perform Z-score normalization
+    normalized_tensor_batch = (numpy_batch - mean_val) / (std_val+1e-5)
+    return normalized_tensor_batch

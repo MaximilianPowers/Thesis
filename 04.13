@@ -1,0 +1,5 @@
+Requirement already satisfied: jax in /Users/maxpowers/miniconda3/envs/DL/lib/python3.10/site-packages (0.4.13)
+Requirement already satisfied: ml-dtypes>=0.1.0 in /Users/maxpowers/miniconda3/envs/DL/lib/python3.10/site-packages (from jax) (0.2.0)
+Requirement already satisfied: numpy>=1.21 in /Users/maxpowers/miniconda3/envs/DL/lib/python3.10/site-packages (from jax) (1.23.5)
+Requirement already satisfied: opt-einsum in /Users/maxpowers/miniconda3/envs/DL/lib/python3.10/site-packages (from jax) (3.3.0)
+Requirement already satisfied: scipy>=1.7 in /Users/maxpowers/miniconda3/envs/DL/lib/python3.10/site-packages (from jax) (1.9.0)

@@ -1,6 +1,39 @@
-from scipy.sparse.linalg import eigs
+from scipy.sparse.linalg import eigsh
 from scipy.spatial import KDTree
 import numpy as np
+
+from riemannian_geometry.computations.riemann_metric import LocalDiagPCA
+import ghalton
+
+def generate_halton_points(point_dataset, N):
+    # Calculate the dimensionality of the dataset
+    dim = point_dataset.shape[1]
+    
+    # Initialize the Halton sequence generator
+    sequencer = ghalton.Halton(dim)
+    
+    # Generate N points
+    halton_points = np.array(sequencer.get(N))
+    
+    # Scale the Halton points to match the range of the original dataset
+    max_ = np.max(point_dataset, axis=0)+1e-2
+    min_ = np.min(point_dataset, axis=0)-1e-2
+
+    scaled_halton_points = halton_points * (max_ - min_) + min_
+    
+    return scaled_halton_points
+
+def rejection_sampling(manifold, sampled_points, tol=1e-4):
+    mask = manifold.metric_tensor(sampled_points.transpose(), nargout=1)
+    mask = np.prod(1/np.diagonal(mask, axis1=1, axis2=2), axis=1)  > tol
+    print(f"Rejected {len(sampled_points) - np.sum(mask)} points")
+    return sampled_points[mask]
+
+def generate_manifold_sample(manifold, activations, N, tol=None):
+    if tol is None:
+        tol = manifold.rho**2
+    halton_points = generate_halton_points(activations, N)
+    return rejection_sampling(manifold, halton_points, tol=tol)
 
 def construct_graph(points, k_neighbors=5):
     """
@@ -25,7 +58,7 @@ def construct_graph(points, k_neighbors=5):
 def compute_heat_kernel(W, D, t):
     """Compute the heat kernel for a given time t using the adjacency matrix W and degree matrix D."""
     L = np.linalg.inv(np.sqrt(D)).dot(D - W).dot(np.linalg.inv(np.sqrt(D)))
-    lambdas, phis = eigs(L, k=10, which='SM')  # Compute the 10 smallest eigenvalues and eigenvectors
+    lambdas, phis = eigsh(L, k=10, which='SM', tol=1e-5)  # Compute the 10 smallest eigenvalues and eigenvectors
 
     K_t = np.zeros_like(W)
     for i in range(len(lambdas)):
@@ -56,13 +89,3 @@ def sample_points_heat_kernel(points, k_neighbors=5, num_samples=10, t=0.1):
     K_t = compute_heat_kernel(W, D, t)
     return sample_using_heat_kernel(points, K_t, num_samples=num_samples)
 
-def sample_layers(activations, k_neighbours=5, num_samples=1000):
-    sampled_activations = [0 for _ in range(len(activations))]
-    if activations[-1].shape[1] == 1:
-        activations = activations[:-1]
-    for indx, activation in enumerate(activations):
-        points = activation.detach().numpy()
-        new_points = sample_points_heat_kernel(points, k_neighbors=k_neighbours, num_samples=num_samples)
-        sampled_activations[indx] = new_points
-
-    return sampled_activations

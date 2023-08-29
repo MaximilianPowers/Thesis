@@ -58,12 +58,11 @@ def plot_surface(ax, activation, labels, xy_grid, metric_layer, layer, N=50):
 
 def plot_lattice_diagonal(ax, activation, labels, xy_grid, metric_layer, layer, N=50):
     zeros = np.zeros(N**2)
+    n_points, K, _ = metric_layer.shape
 
-    n_points, K, L = metric_layer.shape
-
-    tmp_abs = np.abs(metric_layer)
-    flat_abs = tmp_abs.reshape(n_points, K*L)
-    diag_score = np.sum(flat_abs, axis=1) - np.sum(np.diagonal(tmp_abs, axis1=1, axis2=2), axis=1)
+    identity = np.zeros((n_points, K, K))
+    identity[:, torch.arange(K), torch.arange(K)] = 1
+    diag_score = np.sum(np.sum(np.abs(metric_layer*identity - metric_layer), axis=2), axis=1)
     # If the metric is mostly diagonal, we can just use a 2d plot to visualise the metric
     xx = xy_grid[:, 0].reshape(N, N)
     yy = xy_grid[:, 1].reshape(N, N)
@@ -163,15 +162,10 @@ def pullback_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='latti
     N_layers = len(activations_np)
     g = [0 for _ in activations_np]
 
-    xy_grid = generate_lattice(activations_np[0], N)
-    xy_grid_tensor = torch.from_numpy(xy_grid).float()
-    model.forward(xy_grid_tensor, save_activations=True)
-    surface = model.get_activations()
-    surface_np = [activation.detach().numpy() for activation in surface]
-    arr = manifold.metric_tensor(surface_np[-1].transpose())
-    _, D = arr.shape
-    diagonal_matrices = np.eye(D)[None, :, :]  # Add an extra dimension for broadcasting
-    g[-1] = arr[:, :, None] * diagonal_matrices
+
+
+    xy_grid = generate_lattice(activations_np[-1], N)
+    g[-1] = manifold.metric_tensor(xy_grid.transpose())
 
     if plot_method == 'lattice':
         fig, ax = plt.subplots(2, N_layers, figsize=(N_layers * 16, 8*2))
@@ -182,9 +176,13 @@ def pullback_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='latti
         plot_lattice_diagonal(ax, activations_np[-1], labels, xy_grid, g[-1], -1, N=N)
 
     elif plot_method == 'surface':
+        xy_grid = generate_lattice(activations_np[0], N)
+        xy_grid_tensor = torch.from_numpy(xy_grid).float()
+        model.forward(xy_grid_tensor, save_activations=True)
         fig, ax = plt.subplots(2, N_layers, figsize=(N_layers * 16, 16))
+        surface = model.get_activations()
+        surface_np = [activation.detach().numpy() for activation in surface]
         plot_surface(ax, activations_np[-1], labels, surface_np[-1], g[-1], -1, N=N)
-    
     else:
         raise ValueError(f'Plot method {plot_method} not recognised. Please use either lattice or surface.')
     
@@ -238,17 +236,10 @@ def full_pullback_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='
     N_layers = len(activations_np)
     g = [0 for _ in activations_np]
 
-    xy_grid = generate_lattice(activations_np[0], N)
-    xy_grid_tensor = torch.from_numpy(xy_grid).float()
-    model.forward(xy_grid_tensor, save_activations=True)
-    surface = model.get_activations()
-    surface_np = [activation.detach().numpy() for activation in surface]
-    
-    arr = manifold.metric_tensor(surface_np[-1].transpose())
-    _, D = arr.shape
-    diagonal_matrices = np.eye(D)[None, :, :]  # Add an extra dimension for broadcasting
-    g[-1] = arr[:, :, None] * diagonal_matrices
 
+    xy_grid = generate_lattice(activations_np[-1], N)
+    g[-1] = manifold.metric_tensor(xy_grid.transpose())
+#
     if plot_method == 'lattice':
         fig, ax = plt.subplots(2, N_layers, figsize=(N_layers * 16, 8*2))
         plot_lattice(ax, activations_np[-1], labels, xy_grid, g[-1], -1, N=N)    
@@ -258,6 +249,11 @@ def full_pullback_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='
         plot_lattice_diagonal(ax, activations_np[-1], labels, xy_grid, g[-1], -1, N=N)
 
     elif plot_method == 'surface':
+        xy_grid = generate_lattice(activations_np[0], N)
+        xy_grid_tensor = torch.from_numpy(xy_grid).float()
+        model.forward(xy_grid_tensor, save_activations=True)
+        surface = model.get_activations()
+        surface_np = [activation.detach().numpy() for activation in surface]
         fig, ax = plt.subplots(2, N_layers, figsize=(N_layers * 16, 16))
         plot_surface(ax, activations_np[-1], labels, surface_np[-1], g[-1], -1, N=N)
     
@@ -311,16 +307,11 @@ def local_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='lattice'
     N_layers = len(activations_np)
     g = [0 for _ in activations_np]
 
-    xy_grid = generate_lattice(activations_np[0], N)
-    xy_grid_tensor = torch.from_numpy(xy_grid).float()
-    model.forward(xy_grid_tensor, save_activations=True)
-    surface = model.get_activations()
-    surface_np = [activation.detach().numpy() for activation in surface]
 
-    arr = manifold.metric_tensor(surface_np[-1].transpose())
-    _, D= arr.shape
-    diagonal_matrices = np.eye(D)[None, :, :]  # Add an extra dimension for broadcasting
-    g[0] = arr[:, :, None] * diagonal_matrices
+    
+    xy_grid = generate_lattice(activations_np[0], N)
+    g[0] = manifold.metric_tensor(xy_grid.transpose())
+
     
     if plot_method == 'lattice':
         fig, ax = plt.subplots(2, N_layers, figsize=(N_layers * 16, 8*2))
@@ -331,6 +322,11 @@ def local_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='lattice'
         plot_lattice_diagonal(ax, activations_np[0], labels, xy_grid, g[0], 0, N=N)
 
     elif plot_method == 'surface':
+        xy_grid = generate_lattice(activations_np[0], N)
+        xy_grid_tensor = torch.from_numpy(xy_grid).float()
+        model.forward(xy_grid_tensor, save_activations=True)
+        surface = model.get_activations()
+        surface_np = [activation.detach().numpy() for activation in surface]
         fig, ax = plt.subplots(2, N_layers, figsize=(N_layers * 16, 16))
         plot_surface(ax, activations_np[0], labels, xy_grid, g[0], 0, N=N)
     
@@ -343,23 +339,11 @@ def local_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='lattice'
     
         if plot_method == 'lattice' or plot_method == "lattice_diagonal":
             xy_grid = generate_lattice(activations_np[indx], N)
-            xy_grid_tensor = torch.from_numpy(xy_grid).float()
-            
-            model.forward(xy_grid_tensor, save_activations=True).detach().numpy()
-            xy_grid_tmp = model.get_activations()[indx].detach().numpy()
-        
-            arr = manifold.metric_tensor(xy_grid_tmp.transpose())
-            _, D= arr.shape
-            diagonal_matrices = np.eye(D)[None, :, :]  # Add an extra dimension for broadcasting
-            g[indx] = arr[:, :, None] * diagonal_matrices
             
         elif plot_method == 'surface':
             xy_grid = surface_np[indx]
 
-            arr = manifold.metric_tensor(xy_grid.transpose())
-            _, D= arr.shape
-            diagonal_matrices = np.eye(D)[None, :, :]  # Add an extra dimension for broadcasting
-            g[indx] = arr[:, :, None] * diagonal_matrices
+        g[indx] = manifold.metric_tensor(xy_grid.transpose())
 
         
         

@@ -34,19 +34,19 @@ def plot_riemann_metric(model, X, labels, epoch, save_path, sigma=0.05):
         grid_output = model.activations[indx].detach().numpy()
         if grid_output.shape[1] == 1:
             grid_output = grid_output[:-1]
-        metric = np.zeros((len(grid_output), 2))
-        for indy, coord in enumerate(grid_output):
-            coord = coord.reshape(-1, 1)
-            metric[indy] = (manifold.metric_tensor(coord)[0]).tolist()
+        metric = manifold.metric_tensor(grid_output.transpose())
 
         direction_metric = np.zeros((len(grid_output), 2))
         for indy, m in enumerate(metric):
+            m = np.diag(m)
             direction_metric[indy] = m*h/(np.linalg.norm(m)*np.sqrt(2))
         x, y = zip(*xy_grid)
         a, b = zip(*direction_metric)
+        zeros = np.zeros(len(a))
 
         ax[1][indx].scatter(layer_out[:, 0], layer_out[:, 1], c=labels, edgecolors='k')
-        ax[1][indx].quiver(x, y, a, b, angles='xy', scale_units='xy', scale=1, color='r')
+        ax[1][indx].quiver(x, y, a, zeros, angles='xy', scale_units='xy', scale=1, color='r')
+        ax[1][indx].quiver(x, y, zeros, b, angles='xy', scale_units='xy', scale=1, color='r')
         ax[1][indx].set_title(f'Vector Direction - Layer {indx+1}')
 
 
