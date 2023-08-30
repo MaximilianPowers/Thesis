@@ -85,7 +85,7 @@ def pullback_ricci_tensor(model, activations, N=50, wrt="output_wise", method="l
     elif method == "manifold":
         manifold_2 = LocalDiagPCA(activations_np[0], sigma=sigma, rho=1e-3)
 
-        xy_grid_tmp = generate_manifold_sample(manifold_2, N=N**2)
+        xy_grid_tmp = generate_manifold_sample(manifold_2, activations_np[0], N=N**2)
         del manifold_2
         xy_grid_tensor = torch.from_numpy(xy_grid_tmp).float()
         model.forward(xy_grid_tensor, save_activations=True)

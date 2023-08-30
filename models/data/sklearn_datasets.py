@@ -50,8 +50,8 @@ class SpiralDataset(Dataset):
 
 
 class BlobsDataset(Dataset):
-    def __init__(self, n_samples, noise=0.15):
-        self.X, self.y = make_blobs(n_samples=n_samples, n_features=2, centers=2,
+    def __init__(self, n_samples, noise=0.15, centers=4):
+        self.X, self.y = make_blobs(n_samples=n_samples, n_features=2, centers=centers,
                                     cluster_std=noise, center_box=(-4.0, 4.0), shuffle=True, random_state=None)
 
     def __len__(self):

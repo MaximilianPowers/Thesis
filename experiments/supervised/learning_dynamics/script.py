@@ -298,7 +298,6 @@ def run_metric_calculations(model, dataset, epochs, mode, size, model_path, N_po
         tmp = size
     for epoch in tqdm(epochs):
         full_path = f'{model_path}/{tmp}/mlp_{mode}/model_{epoch}.pth'
-
         model_tmp = deepcopy(model)
         model_tmp.load_state_dict(torch.load(full_path))
         if model_tmp.layers[-1].out_features == 1:

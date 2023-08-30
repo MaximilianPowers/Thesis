@@ -26,7 +26,6 @@ def generate_halton_points(point_dataset, N):
 def rejection_sampling(manifold, sampled_points, tol=1e-4):
     mask = manifold.metric_tensor(sampled_points.transpose(), nargout=1)
     mask = np.prod(1/np.diagonal(mask, axis1=1, axis2=2), axis=1)  > tol
-    print(f"Rejected {len(sampled_points) - np.sum(mask)} points")
     return sampled_points[mask]
 
 def generate_manifold_sample(manifold, activations, N, tol=None):
