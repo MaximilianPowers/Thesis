@@ -14,9 +14,6 @@ import scipy.sparse
 import scipy.sparse.linalg
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
-from models.data.sklearn_datasets import MoonDataset
-import matplotlib.pyplot as plt
-from matplotlib import gridspec
 
 def sym_op(x, zero_trace=False):
 	"""Given X, makes L(A) = X @ A @ X' for symmetric matrices A.
@@ -135,6 +132,7 @@ def make_nearest_neighbors_graph(data, k):
 
     # Make the graph symmetric by adding its transpose
     nbr_graph = nbr_graph + nbr_graph.T
+    nbr_graph.data = np.where(nbr_graph.data >= 1, 1, 0)
 
     # Convert to CSR format for efficient arithmetic and storage
     nbr_graph = nbr_graph.tocsr()
@@ -142,7 +140,8 @@ def make_nearest_neighbors_graph(data, k):
     return nbr_graph
 
 def make_tangents_from_metric_eigenvectors(metric_g):
-	_, tangents = np.linalg.eig(metric_g)
+	eigenvalues, tangents = np.linalg.eig(metric_g)
+	tangents = tangents / eigenvalues[:, :, np.newaxis]
 	return tangents
 
 
@@ -229,23 +228,21 @@ def cluster_subspaces(omega):
 			manifold_membership[i].append(np.where(cliques[:, i])[0][j])
 	return tangents
 
-def fit(data, k, metric_g, gamma=None, nnbrs=None, neig=10):
+def fit(data, k, metric_g, neighbor_graph, gamma=None, nnbrs=None, neig=10):
 	"""The Geometric Manifold Component Estimator.
 
 	Args:
 		data: the dataset, a set of points sample from a product manifold.
 		k: the dimensionality of the manifold.
+		metric_g: the metric tensor at each point of the dataset.
+		neighbor_graph: a sparse matrix representing the nearest neighbor graph
 		gamma (optional): the threshold in the spectrum at which to cut off the
 			number of submanifolds.
-		nnbrs (optional): number of neighbors to use for each point.
 
 	Returns:
 		A list of lists of subspace bases, one list for each element of the dataset,
 		and the spectrum of the 2nd-order graph Laplacian.
 	"""
-	if not nnbrs:
-		nnbrs = 2*k
-	neighbor_graph = make_nearest_neighbors_graph(data, nnbrs)
 	tangents = make_tangents_from_metric_eigenvectors(metric_g)
 	connection = make_connection(tangents, neighbor_graph)
 	laplacian = make_laplacian(connection, neighbor_graph)

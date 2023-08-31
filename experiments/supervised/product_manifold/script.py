@@ -1,3 +1,4 @@
+import copy
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
 import networkx as nx
@@ -60,13 +61,13 @@ def product_manifold(surface, V, plot=False, size="2_wide", mode="moon", use_pin
         if verbose:
             print(f"Quantile {q}: {score}")
         bool_ = np.argwhere(V < score).squeeze()
-        subgraph_G = G.subgraph(bool_)
+        subgraph_G = copy.deepcopy(G.subgraph(bool_))
         component = list(nx.connected_components(subgraph_G))
         M = len(component)
         if verbose:
             print(f"Number of connected components: {M}")
         connected_components.append(component)
-        graphs.append(subgraph_G)
+        graphs.append(nx.to_dict_of_lists(G, nodelist=bool_))
         removed_nodes.append(np.argwhere(V >= score).squeeze())
         if plot:
             ax[0][indx].hist(V[bool_])
