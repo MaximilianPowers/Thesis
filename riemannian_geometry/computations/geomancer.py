@@ -119,25 +119,25 @@ def avg_angle_between_subspaces(xs, ys):
 
 
 def make_nearest_neighbors_graph(data, k):
-    n = data.shape[0]
-    nbrs = NearestNeighbors(n_neighbors=k+1, algorithm='auto').fit(data)
-    distances, indices = nbrs.kneighbors(data)
+	n = data.shape[0]
+	nbrs = NearestNeighbors(n_neighbors=k+1, algorithm='auto').fit(data)
+	distances, indices = nbrs.kneighbors(data)
 
-    row_indices = np.repeat(indices[:, 0], k)
-    col_indices = indices[:, 1:].reshape(-1)
-    data = np.ones(row_indices.shape[0])
+	row_indices = np.repeat(indices[:, 0], k)
+	col_indices = indices[:, 1:].reshape(-1)
+	data = np.ones(row_indices.shape[0])
 
-    # Create a sparse matrix in COO format
-    nbr_graph = scipy.sparse.coo_matrix((data, (row_indices, col_indices)), shape=(n, n))
+	# Create a sparse matrix in COO format
+	nbr_graph = scipy.sparse.coo_matrix((data, (row_indices, col_indices)), shape=(n, n))
 
-    # Make the graph symmetric by adding its transpose
-    nbr_graph = nbr_graph + nbr_graph.T
-    nbr_graph.data = np.where(nbr_graph.data >= 1, 1, 0)
+	# Make the graph symmetric by adding its transpose
+	nbr_graph = nbr_graph + nbr_graph.T
+	nbr_graph.data = np.where(nbr_graph.data >= 1, 1, 0)
 
-    # Convert to CSR format for efficient arithmetic and storage
-    nbr_graph = nbr_graph.tocsr()
+	# Convert to CSR format for efficient arithmetic and storage
+	nbr_graph = nbr_graph.tocsr()
 
-    return nbr_graph
+	return nbr_graph
 
 def make_tangents_from_metric_eigenvectors(metric_g):
 	eigenvalues, tangents = np.linalg.eig(metric_g)
@@ -145,47 +145,46 @@ def make_tangents_from_metric_eigenvectors(metric_g):
 	return tangents
 
 
-def make_tangents(data, neighbor_graph, k):
-    """Construct all tangent vectors for the dataset."""
-    tangents = np.zeros((data.shape[0], k, data.shape[1]), dtype=np.float32)
-    for i in tqdm(range(data.shape[0])):
-        # Adapted for CSR format
-        diff = data[neighbor_graph[i].indices] - data[i]
-        _, _, u = np.linalg.svd(diff, full_matrices=False)
-        tangents[i] = u[:k]
-    logging.info('Computed all tangents')
-    return tangents
+def make_tangents(data, neighbor_graph, k, remaining_nodes):
+	"""Construct all tangent vectors for the dataset."""
+	tangents = np.zeros((data.shape[0], k, data.shape[1]), dtype=np.float32)
+	for i in tqdm(remaining_nodes):
+		# Adapted for CSR format
+		diff = data[neighbor_graph.rows[i]] - data[i]
+		_, _, u = np.linalg.svd(diff, full_matrices=False)
+		tangents[i] = u[:k]
+	logging.info('Computed all tangents')
+	return tangents
 
 def make_connection(tangents, neighbor_graph):
-    """Make connection matrices for all edges of the neighbor graph."""
-    connection = {}
-    for i in tqdm(range(tangents.shape[0])):
-        # Adapted for CSR format
-        for j in neighbor_graph[i].indices:
-            if j > i:
-                uy, _, ux = np.linalg.svd(tangents[j] @ tangents[i].T,
-                                          full_matrices=False)
-                conn = uy @ ux
-                connection[(i, j)] = conn
-                connection[(j, i)] = conn.T
-    logging.info('Constructed all connection matrices')
-    return connection
+	"""Make connection matrices for all edges of the neighbor graph."""
+	connection = {}
+	for i in tqdm(range(tangents.shape[0])):
+		for j in neighbor_graph.rows[i]:
+			if j > i:
+				uy, _, ux = np.linalg.svd(tangents[j] @ tangents[i].T,
+										  full_matrices=False)
+				conn = uy @ ux
+				connection[(i, j)] = conn
+				connection[(j, i)] = conn.T
+	logging.info('Constructed all connection matrices')
+	return connection
 
-def make_laplacian(connection, neighbor_graph, sym=True, zero_trace=True):
+def make_laplacian(connection, neighbor_graph, remaining_nodes, sym=True, zero_trace=True):
 	"""Make symmetric zero-trace second-order graph connection Laplacian."""
-	n = neighbor_graph.shape[0]
+	n = len(remaining_nodes)
 	k = list(connection.values())[0].shape[0]
 	bsz = (k*(k+1)//2 - 1 if zero_trace else k*(k+1)//2) if sym else k**2
 	data = np.zeros((neighbor_graph.nnz + n, bsz, bsz), dtype=np.float32)
 	indptr = []
 	indices = np.zeros(neighbor_graph.nnz + n)
 	index = 0
-	for i in tqdm(range(n)):
+	for i in tqdm(remaining_nodes):
 		indptr.append(index)
-		data[index] = len(neighbor_graph[i].indices) * np.eye(bsz)
+		data[index] = len(neighbor_graph.rows[i]) * np.eye(bsz)
 		indices[index] = i
 		index += 1
-		for j in neighbor_graph[i].indices:
+		for j in neighbor_graph.rows[i]:
 			if sym:
 				kron = sym_op(connection[(j, i)], zero_trace=zero_trace)
 			else:
@@ -228,7 +227,7 @@ def cluster_subspaces(omega):
 			manifold_membership[i].append(np.where(cliques[:, i])[0][j])
 	return tangents
 
-def fit(data, k, metric_g, neighbor_graph, gamma=None, nnbrs=None, neig=10):
+def fit(data, k, metric_g, neighbor_graph, remaining_nodes, gamma=None, neig=10):
 	"""The Geometric Manifold Component Estimator.
 
 	Args:
@@ -244,8 +243,9 @@ def fit(data, k, metric_g, neighbor_graph, gamma=None, nnbrs=None, neig=10):
 		and the spectrum of the 2nd-order graph Laplacian.
 	"""
 	tangents = make_tangents_from_metric_eigenvectors(metric_g)
+	#tangents = make_tangents(data, neighbor_graph, k, remaining_nodes)
 	connection = make_connection(tangents, neighbor_graph)
-	laplacian = make_laplacian(connection, neighbor_graph)
+	laplacian = make_laplacian(connection, neighbor_graph, remaining_nodes)
 	eigvals, eigvecs = scipy.sparse.linalg.eigsh(laplacian, k=neig, which='SM')
 	logging.info('Computed bottom eigenvectors of 2nd-order Laplacian')
 	bsz = k*(k+1)//2 - 1  # Block size for the projected 2nd-order Laplacian
@@ -253,10 +253,10 @@ def fit(data, k, metric_g, neighbor_graph, gamma=None, nnbrs=None, neig=10):
 		nm = np.argwhere(eigvals < gamma)[-1, 0] + 1
 	else:  # If no threshold is provided, just use the largest gap in the spectrum
 		nm = np.argmax(eigvals[1:] - eigvals[:-1]) + 1
-	eigvecs = eigvecs.reshape(data.shape[0], bsz, neig)
+	eigvecs = eigvecs.reshape(len(remaining_nodes), bsz, neig)
 	omega = np.zeros((nm, k, k), dtype=np.float32)
 	components = []
-	for i in tqdm(range(data.shape[0])):
+	for i in tqdm(range(len(remaining_nodes))):
 		for j in range(nm):
 			omega[j] = vec_to_sym(eigvecs[i, :, j], k, zero_trace=True)
 		components.append([tangents[i].T @ x.T for x in cluster_subspaces(omega)])

@@ -1,0 +1,20 @@
+{
+    "vanilla": {
+        "n_samples": 1000,
+        "n_samples_test": 200,
+        "noise": 0.01,
+        "n_features": 2,
+        "input_dim": 2,
+        "width": 20,
+        "depth": 2,
+        "output_dim": 2,
+        "lr": 0.002,
+        "epochs": 10000,
+        "lamb": 0.001,
+        "swap_interval": 200,
+        "scheduler": "custom",
+        "log_interval": 100,
+        "save_interval": 1,
+        "fig_interval": 1000
+    }
+}

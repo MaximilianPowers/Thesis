@@ -31,7 +31,6 @@ class MLP(nn.Module):
             + [Layer(layer_width[-1], output_dim, act_func=nn.Sigmoid())])
     def init_forward(self):
         self.activations = []
-        self.jacobians = []
 
     def get_activations(self):
         return self.activations

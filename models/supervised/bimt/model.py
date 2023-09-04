@@ -85,7 +85,6 @@ class BioMLP(nn.Module):
     def forward(self, x, save_activations=False):
         if save_activations:
             self.init_forward()
-            self.save_forward(x)
 
         shp = x.shape
         in_fold = self.layers[0].in_fold
@@ -94,9 +93,9 @@ class BioMLP(nn.Module):
         x = x.reshape(shp[0], shp[1])
         f = torch.nn.SiLU()
         for i in range(self.depth-1):
-            x = f(self.layers[i](x))
             if save_activations:
                 self.save_forward(x)
+            x = f(self.layers[i](x))
         x = self.layers[-1](x)
 
         out_perm_inv = torch.zeros(self.out_dim, dtype=torch.long)

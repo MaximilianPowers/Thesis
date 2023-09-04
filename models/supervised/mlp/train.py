@@ -31,7 +31,6 @@ def train(model, loader, criterion, optimizer, device):
 
         loss.backward()
         optimizer.step()
-
     epoch_loss = running_loss / len(loader.dataset)
     return epoch_loss
 
@@ -69,10 +68,10 @@ def main(args):
 
     model = MLP(input_dim=args.input_dim, output_dim=args.output_dim, num_layers=args.num_layers,
                       layer_width=args.layer_width).to(device)
-    if args.clusters > 2:
+    if args.output_dim > 2:
         criterion = nn.MSELoss()
     else:
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.BCELoss()
     optimizer = optim.Adam(
         model.parameters(), lr=args.learning_rate)
     if args.plot:
@@ -100,16 +99,16 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_epochs', type=int, default=200)
+    parser.add_argument('--num_epochs', type=int, default=400)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--learning_rate', type=float, default=0.01)
     parser.add_argument('--num_layers', type=int, default=7)
     parser.add_argument('--layer_width', type=int, default=2)
-    parser.add_argument('--output_dim', type=int, default=2)
+    parser.add_argument('--output_dim', type=int, default=4)
     parser.add_argument('--input_dim', type=int, default=2)
     parser.add_argument('--n_samples', type=int, default=1000)
-    parser.add_argument('--dataset', type=str, default='moon')
-    parser.add_argument('--noise', type=float, default=0.01)
+    parser.add_argument('--dataset', type=str, default='blobs')
+    parser.add_argument('--noise', type=float, default=0.4)
     parser.add_argument('--clusters', type=float, default=4)
     parser.add_argument('--length', type=float, default=2*pi)
     parser.add_argument('--seed', type=int, default=2)

@@ -3,7 +3,7 @@ from riemannian_geometry.computations.riemann_metric import LocalDiagPCA
 from utils.plotting.mesh import generate_lattice
 from utils.metrics.metrics import z_normalise
 from riemannian_geometry.computations.sample import generate_manifold_sample
-from riemannian_geometry.differential_geometry.curvature import batch_curvature
+from riemannian_geometry.differential_geometry.curvature import batch_curvature, batch_vectorised_christoffel_symbols
 import torch
 from torch.func import vmap, jacfwd, jacrev
 
@@ -134,12 +134,12 @@ def pullback_ricci_tensor(model, activations, N=50, wrt="output_wise", method="l
 
         if normalised:
             g_inv_pullback = z_normalise(g_inv_pullback)
-            R_pullback = z_normalise(R_pullback)
+        R_pullback = z_normalise(R_pullback)
 
         G[indx] = g_inv_pullback
         Ricci[indx] = R_pullback
         save_grids[indx] = xy_grid
-    return Ricci, G
+    return Ricci, G, save_grids
 
 
 
@@ -221,3 +221,132 @@ def pullback_all_metrics(model, activations, N=50, wrt="output_wise", method="la
         save_grids[indx] = xy_grid
 
     return g, dg, ddg, save_grids
+
+def pullback_metric(model, activations, N=50, wrt="output_wise", method="lattice", normalised=False, sigma=0.05):
+    activations_np = [activation.detach().numpy() for activation in activations]
+    N_layers = len(activations_np)
+    manifold = LocalDiagPCA(activations_np[-1], sigma=sigma, rho=1e-3)
+    
+    if method == "lattice":
+        xy_grid = generate_lattice(activations_np[-1], N)
+
+    elif method == "manifold":
+        manifold_2 = LocalDiagPCA(activations_np[0], sigma=sigma, rho=1e-3)
+        xy_grid = generate_manifold_sample(manifold_2, activations_np[0], N=N**2)
+        del manifold_2
+
+        surface_tensor = torch.from_numpy(xy_grid).float()
+        model.forward(surface_tensor, save_activations=True)
+        surfaces = model.get_activations() 
+        _xy_grids = [surface.detach().numpy() for surface in surfaces]
+        xy_grid = _xy_grids[-1]
+    else:
+        raise ValueError("method must be either 'lattice' or 'manifold'")
+    g_ = manifold.metric_tensor(xy_grid.transpose(), nargout=1)
+
+
+    g = [0 for _ in activations_np]
+    
+    g[-1] = g_
+    save_grids = [0 for _ in activations_np]
+    save_grids[-1] = xy_grid
+
+    for indx in reversed(range(0, N_layers-1)):
+        dim_in = model.layers[indx].in_features
+        dim_out = model.layers[indx].out_features
+        if method == "manifold":
+            xy_grid = _xy_grids[indx]
+            xy_grid_tensor = torch.from_numpy(xy_grid).float()
+
+        elif method == "lattice":
+            xy_grid = generate_lattice(activations_np[indx], N)
+            xy_grid_tensor = torch.from_numpy(xy_grid).float()
+
+        
+        if wrt == "layer_wise":
+            jacobian = compute_jacobian_multi_layer(model.layers[indx], xy_grid_tensor, dim_in, dim_out)
+            ref = indx + 1
+
+        elif wrt == "output_wise":
+            def forward_layers(x):
+                return model.forward_layers(x, indx)
+            dim_out = model.layers[-1].out_features
+            jacobian = compute_jacobian_multi_layer(forward_layers, xy_grid_tensor, dim_in, dim_out)
+            ref = -1
+        jacobian = jacobian.detach().numpy()
+        g_pullback = np.einsum('lai,lbj,lab->lij', jacobian, jacobian, g[ref])
+        if normalised:
+            g_pullback = z_normalise(g_pullback)
+        g[indx] = g_pullback
+        save_grids[indx] = xy_grid
+
+    return g, save_grids
+
+def pullback_metric_christoffel(model, activations, N=20, sigma=0.05, method="manifold", wrt="output_wise", normalised=False):
+    activations_np = [activation.detach().numpy() for activation in activations]
+    N_layers = len(activations_np)
+    manifold = LocalDiagPCA(activations_np[-1], sigma=sigma, rho=1e-3)
+    
+    if method == "lattice":
+        xy_grid = generate_lattice(activations_np[-1], N)
+
+    elif method == "manifold":
+        manifold_2 = LocalDiagPCA(activations_np[0], sigma=sigma, rho=1e-3)
+        xy_grid = generate_manifold_sample(manifold_2, activations_np[0], N=N**2)
+        del manifold_2
+
+        surface_tensor = torch.from_numpy(xy_grid).float()
+        model.forward(surface_tensor, save_activations=True)
+        surfaces = model.get_activations() 
+        _xy_grids = [surface.detach().numpy() for surface in surfaces]
+        xy_grid = _xy_grids[-1]
+    else:
+        raise ValueError("method must be either 'lattice' or 'manifold'")
+    g_, dg_ = manifold.metric_tensor(xy_grid.transpose(), nargout=2)
+    g_inv_ = np.linalg.inv(g_)
+    Gamma = batch_vectorised_christoffel_symbols(g_inv_, dg_)
+
+    
+    g = [0 for _ in activations_np]
+    Christoffel = [0 for _ in activations_np]
+    g[-1] = g_
+    Christoffel[-1] = Gamma
+
+    save_grids = [0 for _ in activations_np]
+    save_grids[-1] = xy_grid
+
+    for indx in reversed(range(0, N_layers-1)):
+        dim_in = model.layers[indx].in_features
+        dim_out = model.layers[indx].out_features
+        if method == "manifold":
+            xy_grid = _xy_grids[indx]
+            xy_grid_tensor = torch.from_numpy(xy_grid).float()
+
+        elif method == "lattice":
+            xy_grid = generate_lattice(activations_np[indx], N)
+            xy_grid_tensor = torch.from_numpy(xy_grid).float()
+
+        
+        if wrt == "layer_wise":
+            jacobian = compute_jacobian_multi_layer(model.layers[indx], xy_grid_tensor, dim_in, dim_out)
+            ref = indx + 1
+
+        elif wrt == "output_wise":
+            def forward_layers(x):
+                return model.forward_layers(x, indx)
+            dim_out = model.layers[-1].out_features
+            jacobian = compute_jacobian_multi_layer(forward_layers, xy_grid_tensor, dim_in, dim_out)
+            ref = -1
+        jacobian = jacobian.detach().numpy()
+        g_pullback = np.einsum('lai,lbj,lab->lij', jacobian, jacobian, g[ref])
+        Gamma = np.einsum('lai,lbj,lck,labc->lijk', jacobian, jacobian, jacobian, Christoffel[ref])
+
+
+        if normalised:
+            Gamma = z_normalise(Gamma)
+            g_pullback = z_normalise(g_pullback)
+        g[indx] = g_pullback
+        Christoffel[indx] = Gamma
+        save_grids[indx] = xy_grid
+
+    return g, Christoffel, save_grids

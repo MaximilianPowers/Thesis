@@ -280,7 +280,7 @@ def flatness_metrics_pullback(model, dataset, N_points, wrt="layer_wise", sigma=
     activations_np = [a.detach().numpy() for a in activations]
     N_layers = len(activations_np)
     start_time = process_time()
-    Ricci, G = pullback_ricci_tensor(model, activations, N_points, wrt=wrt, method="manifold", sigma=sigma, normalised=True)
+    Ricci, G, _ = pullback_ricci_tensor(model, activations, N_points, wrt=wrt, method="manifold", sigma=sigma, normalised=True)
     end_time = process_time()
     
     final_results = []
