@@ -1,8 +1,7 @@
 from scipy.sparse.linalg import eigsh
 from scipy.spatial import KDTree
 import numpy as np
-
-from riemannian_geometry.computations.riemann_metric import LocalDiagPCA
+import networkx as nx
 import ghalton
 
 def generate_halton_points(point_dataset, N):
@@ -54,10 +53,36 @@ def construct_graph(points, k_neighbors=5):
     D = np.diag(np.sum(W, axis=1))
     return W, D
 
-def compute_heat_kernel(W, D, t):
+def find_minimal_connected_graph(points, start_k=None, connected_components=2):
+    if start_k == None:
+        start_k = int(np.sqrt(len(points)))
+    W_start, D_start = construct_graph(points, k_neighbors=start_k)
+    G_start = nx.from_numpy_array(W_start)
+    if nx.number_connected_components(G_start) <= connected_components:
+        W, D = W_start, D_start
+        for k in reversed(range(1, start_k)):
+            W_tmp, D_tmp = construct_graph(points, k_neighbors=k)
+            G = nx.from_numpy_array(W)
+            if nx.number_connected_components(G) > connected_components:
+                return W, D, k+1
+            else:
+                W, D = W_tmp, D_tmp
+    if nx.number_connected_components(G_start) > connected_components:
+        k_max = len(points)//2
+        W, D = W_start, D_start
+        for k in range(start_k+1, k_max):
+            W_tmp, D_tmp = construct_graph(points, k_neighbors=k)
+            G = nx.from_numpy_array(W)
+            if nx.number_connected_components(G) <= connected_components:
+                return W, D, k
+            else:
+                W, D = W_tmp, D_tmp
+    return W_start, D_start, start_k    
+
+def compute_heat_kernel(W, D, t, dim):
     """Compute the heat kernel for a given time t using the adjacency matrix W and degree matrix D."""
     L = np.linalg.inv(np.sqrt(D)).dot(D - W).dot(np.linalg.inv(np.sqrt(D)))
-    lambdas, phis = eigsh(L, k=10, which='SM', tol=1e-5)  # Compute the 10 smallest eigenvalues and eigenvectors
+    lambdas, phis = eigsh(L, k=dim, which='SM', tol=1e-5)  # Compute the 10 smallest eigenvalues and eigenvectors
 
     K_t = np.zeros_like(W)
     for i in range(len(lambdas)):
@@ -82,9 +107,15 @@ def sample_using_heat_kernel(points, K_t, num_samples=10):
 
     return np.array(new_points)
 
-def sample_points_heat_kernel(points, k_neighbors=5, num_samples=10, t=0.1):
+def sample_points_heat_kernel(points, num_samples=10, t=0.1, connect_components=1):
     """Sample new points using the heat kernel."""
-    W, D = construct_graph(points, k_neighbors=k_neighbors)
-    K_t = compute_heat_kernel(W, D, t)
+    W, D, k = find_minimal_connected_graph(points, connected_components=connect_components, start_k=None)
+    print(f"Using {k} nearest neighbors")
+    K_t = compute_heat_kernel(W, D, t, dim=points.shape[1])
     return sample_using_heat_kernel(points, K_t, num_samples=num_samples)
+
+def uniform_sample(n_samples, dataset):
+    max_ = np.max(dataset, axis=0) + np.random.uniform(0, 0.1, size=dataset.shape[1])
+    min_ = np.min(dataset, axis=0) + np.random.uniform(0, 0.1, size=dataset.shape[1])
+    return np.random.uniform(min_, max_, size=(n_samples, dataset.shape[1]))
 

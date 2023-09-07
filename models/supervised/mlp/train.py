@@ -2,6 +2,7 @@ from math import pi
 import argparse
 import torch
 from torch import nn, optim
+from torch.distributions.beta import Beta
 from torch.utils.data import DataLoader
 from models.data.sklearn_datasets import MoonDataset, SpiralDataset, BlobsDataset, CirclesDataset
 import matplotlib.pyplot as plt
@@ -34,6 +35,41 @@ def train(model, loader, criterion, optimizer, device):
     epoch_loss = running_loss / len(loader.dataset)
     return epoch_loss
 
+def train_mixup(model, loader, criterion, optimizer, device, alpha):
+    model.train()
+    running_loss = 0
+    beta_distribution = Beta(alpha, alpha)
+
+    for inputs, targets in loader:
+        optimizer.zero_grad()
+        
+        
+        # Add other sampling techniques here
+        # elif sampling_technique == 'other_techniques':
+        #     # Implement other sampling techniques
+        
+        lam = beta_distribution.sample().item()
+        
+        batch_size = targets.size(0)
+        index = torch.randperm(batch_size).to(device)
+        
+        inputs_mixed = lam * inputs + (1 - lam) * inputs[index]
+        targets_a, targets_b = targets, targets[index]
+
+        # Continue as before
+        if model.output_dim > 1:
+            targets_a = F.one_hot(targets_a.clone().detach().to(torch.int64), num_classes=model.output_dim).float()
+            targets_b = F.one_hot(targets_b.clone().detach().to(torch.int64), num_classes=model.output_dim).float()
+
+        inputs_mixed, targets_a, targets_b = inputs_mixed.to(device), targets_a.to(device), targets_b.to(device)
+        outputs = model(inputs_mixed)
+        loss = lam * criterion(outputs, targets_a) + (1 - lam) * criterion(outputs, targets_b)
+        running_loss += loss.item() * inputs.size(0)
+        loss.backward()
+        optimizer.step()
+
+    epoch_loss = running_loss / len(loader.dataset)
+    return epoch_loss
 
 def main(args):
 
@@ -55,13 +91,13 @@ def main(args):
     cur_dir = f"./models/supervised/mlp/saved_models/{args.name}"
 
     # Check if directory exists
-    if not os.path.exists(f'{cur_dir}/mlp_{args.dataset}/'):
-        os.makedirs(f'{cur_dir}/mlp_{args.dataset}/')
+    if not os.path.exists(f'{cur_dir}/{args.dataset}/'):
+        os.makedirs(f'{cur_dir}/{args.dataset}/')
     # Remove all files in directory
-    files = glob.glob(f'{cur_dir}/mlp_{args.dataset}/*')
+    files = glob.glob(f'{cur_dir}/{args.dataset}/*')
     for f in files:
         os.remove(f)
-    with open(f'{cur_dir}/mlp_{args.dataset}/dataset.pkl', 'wb') as f:
+    with open(f'{cur_dir}/{args.dataset}/dataset.pkl', 'wb') as f:
         pickle.dump(dataset, f)
 
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
@@ -79,8 +115,11 @@ def main(args):
         res_loss = []
     for epoch in range(args.num_epochs):
         torch.save(
-            model.state_dict(), f'{cur_dir}/mlp_{args.dataset}/model_{epoch}.pth')
-        train_loss = train(model, loader, criterion, optimizer, device)
+            model.state_dict(), f'{cur_dir}/{args.dataset}/model_{epoch}.pth')
+        if args.mixup:
+            train_loss = train_mixup(model, loader, criterion, optimizer, device, args.alpha)   
+        else:
+            train_loss = train(model, loader, criterion, optimizer, device)
         if args.plot:
             res_loss.append(train_loss)
         if epoch % (args.num_epochs//20) == 0:
@@ -91,10 +130,10 @@ def main(args):
                 res_acc.append(acc)
     if args.plot:
         plt.plot(res_acc)
-        plt.savefig(f'{cur_dir}/mlp_{args.dataset}/acc.png')
+        plt.savefig(f'{cur_dir}/{args.dataset}/acc.png')
         plt.clf()
         plt.plot(res_loss)
-        plt.savefig(f'{cur_dir}/mlp_{args.dataset}/loss.png')
+        plt.savefig(f'{cur_dir}/{args.dataset}/loss.png')
 
 
 if __name__ == "__main__":
@@ -102,17 +141,22 @@ if __name__ == "__main__":
     parser.add_argument('--num_epochs', type=int, default=400)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--learning_rate', type=float, default=0.01)
+    parser.add_argument('--mixup', type=bool, default=True)
+    parser.add_argument('--alpha', type=float, default=1)
+
     parser.add_argument('--num_layers', type=int, default=7)
-    parser.add_argument('--layer_width', type=int, default=2)
-    parser.add_argument('--output_dim', type=int, default=4)
+    parser.add_argument('--layer_width', type=int, default=10)
+    parser.add_argument('--output_dim', type=int, default=2)
     parser.add_argument('--input_dim', type=int, default=2)
+
     parser.add_argument('--n_samples', type=int, default=1000)
-    parser.add_argument('--dataset', type=str, default='blobs')
-    parser.add_argument('--noise', type=float, default=0.4)
+    parser.add_argument('--dataset', type=str, default='moon')
+    parser.add_argument('--noise', type=float, default=0.01)
     parser.add_argument('--clusters', type=float, default=4)
     parser.add_argument('--length', type=float, default=2*pi)
+    
     parser.add_argument('--seed', type=int, default=2)
     parser.add_argument('--plot', type=bool, default=True)
-    parser.add_argument('--name', type=str, default="2_wide")
+    parser.add_argument('--name', type=str, default="mixup_vanilla")
     args = parser.parse_args()
     main(args)

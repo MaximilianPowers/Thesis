@@ -38,23 +38,14 @@ class MLP(nn.Module):
     def save_forward(self, coordinates):
         self.activations.append(coordinates)
 
-    def save_jacobian(self, coordinates, func):
-        def J(x): return jacobian(func, coordinates)
-
-        self.jacobians.append(J(coordinates))
-
-    def forward(self, x, save_activations=False, save_jacobians=False):
+    def forward(self, x, save_activations=False):
         self.init_forward()
         for layer in self.layers:
             if save_activations:
                 self.save_forward(x)
-            if save_jacobians:
-                self.save_jacobians(x, layer)
             x = layer.forward(x)
         if save_activations:
             self.save_forward(x)
-        if save_jacobians:
-            self.save_jacobians(x, layer)
 
         return x
 
@@ -64,3 +55,4 @@ class MLP(nn.Module):
         for layer in self.layers[indx:]:
             x = layer.forward(x)
         return x
+

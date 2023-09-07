@@ -8,8 +8,8 @@ class BioLinear(nn.Module):
 
     def __init__(self, in_dim, out_dim, in_fold=1, out_fold=1):
         super(BioLinear, self).__init__()
-        self.in_dim = in_dim
-        self.out_dim = out_dim
+        self.in_features = in_dim
+        self.out_features = out_dim
         self.linear = nn.Linear(in_dim, out_dim)
         self.in_fold = in_fold
         self.out_fold = out_fold
@@ -36,14 +36,14 @@ class BioMLP(nn.Module):
         super(BioMLP, self).__init__()
         if shp == None:
             shp = [in_dim] + [w]*(depth-1) + [out_dim]
-            self.in_dim = in_dim
-            self.out_dim = out_dim
+            self.in_features = in_dim
+            self.out_features = out_dim
             self.depth = depth
-
         else:
-            self.in_dim = shp[0]
-            self.out_dim = shp[-1]
-            self.depth = len(shp) - 1
+            self.in_features = shp[0]
+            self.out_features = shp[-1]
+            self.depth = len(shp)-1
+        self.num_layers = self.depth 
 
         linear_list = []
         for i in range(self.depth):
@@ -56,7 +56,6 @@ class BioMLP(nn.Module):
             else:
                 linear_list.append(BioLinear(shp[i], shp[i+1]))
         self.layers = nn.ModuleList(linear_list)
-
         if token_embedding == True:
             # embedding size: number of tokens * embedding dimension
             self.embedding = torch.nn.Parameter(
@@ -66,11 +65,11 @@ class BioMLP(nn.Module):
         # parameters for the bio-inspired trick
         self.l0 = 0.2  # distance between two nearby layers
         self.in_perm = torch.nn.Parameter(torch.tensor(
-            np.arange(int(self.in_dim/self.layers[0].in_fold)), dtype=torch.float))
-        # self.register_parameter(name='in_perm', param=torch.nn.Parameter(torch.tensor(np.arange(int(self.in_dim/self.layers[0].in_fold)), dtype=torch.float)))
+            np.arange(int(self.in_features/self.layers[0].in_fold)), dtype=torch.float))
+        # self.register_parameter(name='in_perm', param=torch.nn.Parameter(torch.tensor(np.arange(int(self.in_features/self.layers[0].in_fold)), dtype=torch.float)))
         self.out_perm = torch.nn.Parameter(torch.tensor(
-            np.arange(int(self.out_dim/self.layers[-1].out_fold)), dtype=torch.float))
-        # self.register_parameter(name='out_perm', param=torch.nn.Parameter(torch.tensor(np.arange(int(self.out_dim/self.layers[-1].out_fold)), dtype=torch.float)))
+            np.arange(int(self.out_features/self.layers[-1].out_fold)), dtype=torch.float))
+        # self.register_parameter(name='out_perm', param=torch.nn.Parameter(torch.tensor(np.arange(int(self.out_features/self.layers[-1].out_fold)), dtype=torch.float)))
         self.top_k = 10
         self.token_embedding = token_embedding
         self.n_parameters = sum(p.numel() for p in self.parameters())
@@ -79,9 +78,19 @@ class BioMLP(nn.Module):
     def init_forward(self):
         self.activations = []
 
+    def get_activations(self):
+        return self.activations
+    
     def save_forward(self, coordinates):
         self.activations.append(coordinates)
 
+    def forward_layers(self, x, indx):
+        # Go forward layers starting at indx, used for pullback metric mapping
+        assert indx < self.num_layers
+        for layer in self.layers[indx:]:
+            x = layer.forward(x)
+        return x
+    
     def forward(self, x, save_activations=False):
         if save_activations:
             self.init_forward()
@@ -96,10 +105,12 @@ class BioMLP(nn.Module):
             if save_activations:
                 self.save_forward(x)
             x = f(self.layers[i](x))
+        if save_activations:
+            self.save_forward(x)
         x = self.layers[-1](x)
 
-        out_perm_inv = torch.zeros(self.out_dim, dtype=torch.long)
-        out_perm_inv[self.out_perm.long()] = torch.arange(self.out_dim)
+        out_perm_inv = torch.zeros(self.out_features, dtype=torch.long)
+        out_perm_inv[self.out_perm.long()] = torch.arange(self.out_features)
         x = x[:, out_perm_inv]
         # x = x[:,self.out_perm]
         if save_activations:
@@ -232,7 +243,7 @@ class BioMLP(nn.Module):
         # Relocate neurons in the whole model
         linears = self.get_linear_layers()
         num_linear = len(linears)
-        for i in range(num_linear+1):
+        for i in range(num_linear):
             self.relocate_i(i)
 
     def plot(self):
@@ -306,3 +317,4 @@ class BioMLP(nn.Module):
         with torch.no_grad():
             for param, original_param in zip(self.parameters(), self.original_params):
                 param.data.copy_(original_param.data)
+

@@ -143,7 +143,7 @@ def plot_geometry(Net, a_numpy, b_numpy, epoch, grid_dim_x=15, grid_dim_y=15, pl
     """
     # prepare plots
     if not os.path.exists(save_folder):
-        os.mkdir(save_folder)
+        os.makedirs(save_folder, exist_ok=True)
     fig, plots = plt.subplots(plot_rows, plot_cols, figsize=[
                               5 * plot_cols, 5 * plot_rows])
     if plot_rows > 1:

@@ -137,7 +137,7 @@ for epoch in range(EPOCHS):
     if args.plot:
             res_loss.append(total_loss.detach().numpy())
     if epoch % SAVE_INTERVAL == 0:
-        torch.save(model, f'{cur_dir}/model_{epoch}.pt')
+        torch.save(model.state_dict(), f'{cur_dir}/model_{epoch}.pth')
         
     
     if (epoch+1) % SWAP_INTERVAL == 0:

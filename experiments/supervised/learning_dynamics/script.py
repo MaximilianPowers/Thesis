@@ -87,9 +87,45 @@ def plot_ricci_curvature(ax, xy_grid, activations, labels, Ricci, N, layer, mani
     ax[1][layer].quiver(x, y, norm_eigenvectors[:, 0, 0], norm_eigenvectors[:, 0, 1], scale_units='xy', scale=1, color='r')
     ax[1][layer].quiver(x, y, norm_eigenvectors[:, 1, 0], norm_eigenvectors[:, 1, 1], scale_units='xy', scale=1, color='r')
     
+def plot_ricci_magnitude(ax, xy_grid, activations, labels, Ricci, N, layer, manifold=False):
+    
+    max_x, max_y = np.max(xy_grid[:, 0]), np.max(xy_grid[:, 1])
+    min_x, min_y = np.min(xy_grid[:, 0]), np.min(xy_grid[:, 1])
+    Z_1 = np.log(np.linalg.norm(Ricci, axis=(1,2), ord="fro"))
+    Z_2 = np.log(np.linalg.norm(Ricci, axis=(1,2), ord=2))
 
+    ax[0][layer].scatter(activations[:, 0], activations[:, 1], c=labels, edgecolors='k', alpha=0.5)
+    ax[0][layer].set_title(f'Log Frobenius Norm of Ricci Curvature - Layer {layer}')
 
+    ax[1][layer].scatter(activations[:, 0], activations[:, 1], c=labels, edgecolors='k', alpha=0.5)
+    ax[1][layer].set_title(f'Log Euclidean Norm of Ricci Curvature - Layer {layer}')
 
+    if not manifold:
+        Z = Z_1.reshape(N, N)
+        xx = xy_grid[:, 0].reshape(N, N)
+        yy = xy_grid[:, 1].reshape(N, N)
+        contour = ax[0][layer].contourf(xx, yy, Z, alpha=0.4, cmap="RdBu_r")
+        Z = Z_2.reshape(N, N)
+        contour = ax[1][layer].contourf(xx, yy, Z, alpha=0.4, cmap="RdBu_r")
+
+    else:
+        Z = Z_1
+        Z[Z > np.quantile(Z, 0.95)] = np.quantile(Z, 0.95)
+        Z[Z < np.quantile(Z, 0.05)] = np.quantile(Z, 0.05)
+        Z_color = (Z - np.min(Z))/(np.max(Z) -np.min(Z) + 1e-5)
+        Z_size = (Z_color*(max_x - min_x)*(max_y - min_y)/(N^2))*1000
+        contour = ax[0][layer].scatter(xy_grid[:, 0], xy_grid[:, 1], 
+                                       c=Z_color, cmap="RdBu_r", alpha=0.6, s=Z_size*10)
+        plt.colorbar(contour, ax=ax[0][layer])
+
+        Z = Z_2
+        Z[Z > np.quantile(Z, 0.95)] = np.quantile(Z, 0.95)
+        Z[Z < np.quantile(Z, 0.05)] = np.quantile(Z, 0.05)
+        Z_color = (Z - np.min(Z))/(np.max(Z) -np.min(Z) + 1e-5)
+        Z_size = (Z_color*(max_x - min_x)*(max_y - min_y)/(N^2))*1000
+        contour = ax[1][layer].scatter(xy_grid[:, 0], xy_grid[:, 1], 
+                                       c=Z_color, cmap="RdBu_r", alpha=0.6, s=Z_size*10)
+        plt.colorbar(contour, ax=ax[0][layer])
 
 def generate_pullback_plots(model, dataset, N_scalar, N_ricci, save_path="None", wrt="layer_wise", method="lattice", sigma=0.05):
     X = torch.from_numpy(dataset.X).float()
@@ -115,15 +151,19 @@ def generate_pullback_plots(model, dataset, N_scalar, N_ricci, save_path="None",
 
     fig_ricci, ax_ricci = plt.subplots(3, N_layers, figsize=(N_layers*16, 8*3))
     
+    fig_ricci_mag, ax_ricci_mag = plt.subplots(2, N_layers, figsize=(N_layers*16, 8*2))
+
     for indx in range(0, N_layers):
         xy_grid = surface_np_scalar[indx]
         _, _, Scalar = batch_curvature(g_s[indx], dg_s[indx], ddg_s[indx])
         plot_scalar_curvature(ax_scalar, xy_grid, activations_np[indx], labels, Scalar, N_scalar, indx, manifold=manifold_)
         xy_grid = surface_np_ricci[indx]
         _, Ricci, _ = batch_curvature(g_r[indx], dg_r[indx], ddg_r[indx])
+        plot_ricci_magnitude(ax_ricci_mag, xy_grid, activations_np[indx], labels, Ricci, N_ricci, indx, manifold=manifold_)
         plot_ricci_curvature(ax_ricci, xy_grid, activations_np[indx], labels, Ricci, N_ricci, indx, manifold=manifold_)
 
     if save_path != "None":
+        fig_ricci_mag.savefig(save_path + f"pullback_{wrt}_{method}_mag_ricci.png")
         fig_ricci.savefig(save_path + f"pullback_{wrt}_{method}_ricci.png")
         fig_scalar.savefig(save_path + f"pullback_{wrt}_{method}_scalar.png")
     plt.close()
@@ -264,7 +304,7 @@ def flatness_metrics(model, dataset, N_points, save_path=None, wrt="layer_wise",
             plot_metric_results(ax_res, surface[indx], activations_np[indx], labels, results[:, :-1], N_points, indx, metric_names)
         final_results.append(results)
     if plot:
-        fig_res.savefig(f"{save_path}/low_s_metrics_{wrt}.png")
+        fig_res.savefig(f"{save_path}/metrics_{wrt}.png")
         plt.close()
     return final_results
 
@@ -282,7 +322,6 @@ def flatness_metrics_pullback(model, dataset, N_points, wrt="layer_wise", sigma=
     start_time = process_time()
     Ricci, G, _ = pullback_ricci_tensor(model, activations, N_points, wrt=wrt, method="manifold", sigma=sigma, normalised=True)
     end_time = process_time()
-    
     final_results = []
     for indx, (R, g_inv) in enumerate(zip(Ricci, G)):
         results = _pullback_batch_compute_metrics(R, g_inv, tol=1e-10)
@@ -290,14 +329,14 @@ def flatness_metrics_pullback(model, dataset, N_points, wrt="layer_wise", sigma=
 
     return final_results
 
-def run_metric_calculations(model, dataset, epochs, mode, size, model_path, N_points=20, wrt="layer_wise", sigma=0.05):
+def run_metric_calculations(model, dataset, model_name, epochs, mode, size, model_path, N_points=20, wrt="layer_wise", sigma=0.05):
     final_results = []
     if size == "skinny":
         tmp = "2_wide"
     else:
         tmp = size
     for epoch in tqdm(epochs):
-        full_path = f'{model_path}/{tmp}/mlp_{mode}/model_{epoch}.pth'
+        full_path = f'{model_path}/{tmp}/{mode}/model_{epoch}.pth'
         model_tmp = deepcopy(model)
         model_tmp.load_state_dict(torch.load(full_path))
         if model_tmp.layers[-1].out_features == 1:
@@ -308,8 +347,7 @@ def run_metric_calculations(model, dataset, epochs, mode, size, model_path, N_po
         results = flatness_metrics_pullback(model_tmp, dataset, N_points, wrt=wrt, sigma=sigma)
         final_results.append(results)
     layers = model_tmp.num_layers
-    final_results = np.array(final_results)
-    N_metrics = final_results.shape[-1]
+    N_metrics = 2
     plot_results_mu = [[[] for _ in range(layers)] for _ in range(N_metrics)]
     plot_median = [[[] for _ in range(layers)] for _ in range(N_metrics)]
     plot_quartile_5 = [[[] for _ in range(layers)] for _ in range(N_metrics)]
@@ -342,14 +380,14 @@ def run_metric_calculations(model, dataset, epochs, mode, size, model_path, N_po
     plot_quartile_95 = np.array(plot_quartile_95)
 
     plot_results = np.array([plot_mu, plot_median, plot_quartile_5, plot_quartile_25, plot_quartile_75, plot_quartile_95])
-    os.makedirs(f"figures/metrics/{size}", exist_ok=True)
+    os.makedirs(f"figures/metrics/{model_name}/{size}", exist_ok=True)
     
-    plot_euclidean_metrics(plot_results, epochs, mode, size, wrt=wrt)
-    plot_groupby_metrics(plot_results, epochs, mode, size, wrt=wrt)
+    plot_euclidean_metrics(plot_results, model_name, epochs, mode, size, wrt=wrt)
+    plot_groupby_metrics(plot_results, model_name, epochs, mode, size, wrt=wrt)
 
     return final_results, plot_results
 
-def plot_euclidean_metrics(plot_res, epochs, mode, size, wrt="layer_wise"):
+def plot_euclidean_metrics(plot_res, model_name, epochs, mode, size, wrt="layer_wise"):
     concentration, metrics, layers, _ = plot_res.shape
     concentration_dict = {0: "mean", 1: "median", 2: "quartile_5", 3: "quartile_25", 4: "quartile_75", 5: "quartile_95"}
     metrics_dict = {0: "scalar_curvature", 1: "scalar_curvature_weighted"}
@@ -362,9 +400,10 @@ def plot_euclidean_metrics(plot_res, epochs, mode, size, wrt="layer_wise"):
                 ax[metric, c].set_title(f"Metric {metrics_dict[metric]} with {concentration_dict[c]} concentration")
                 ax[metric, c].legend()
 
-        fig.savefig(f"figures/metrics/{size}/{layer}_{mode}_{wrt}_metrics.png")
+        fig.savefig(f"figures/metrics/{model_name}/{size}/{layer}_{mode}_{wrt}_metrics.png")
         plt.close()
-def plot_groupby_metrics(plot_res, epochs, mode, size, wrt="layer_wise"):
+
+def plot_groupby_metrics(plot_res, model_name, epochs, mode, size, wrt="layer_wise"):
     concentration, metrics, layers, _ = plot_res.shape
     metrics_dict = {0: "scalar_curvature", 1: "scalar_curvature_weighted"}
 
@@ -378,5 +417,5 @@ def plot_groupby_metrics(plot_res, epochs, mode, size, wrt="layer_wise"):
             ax[metric, c].set_title(f"Metric {metrics_dict[metric]}")
             ax[metric, c].legend()
 
-    fig.savefig(f"figures/metrics/{size}/grouped_{mode}_{wrt}_metrics.png")
+    fig.savefig(f"figures/metrics/{model_name}/{size}/grouped_{mode}_{wrt}_metrics.png")
     plt.close()

@@ -261,7 +261,7 @@ def full_pullback_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='
         raise ValueError(f'Plot method {plot_method} not recognised. Please use either lattice or surface.')
     store_plot_grids = [_ for _ in activations_np]
     store_plot_grids[-1] = xy_grid
-    final_layer_metric_tensor = torch.from_numpy(g[-1]).float()
+    final_layer_metric_tensor = g[-1]
     dim_out = model.layers[-1].out_features
     for indx in reversed(range(0, N_layers-1)):
         def forward_layers(x):
@@ -276,8 +276,9 @@ def full_pullback_plot(model, X, labels, save_path, epoch=0, N=15, plot_method='
             xy_grid = surface_np[indx]
         dim_in = model.layers[indx].in_features
         jacobian = compute_jacobian_multi_layer(forward_layers, xy_grid_tensor, dim_in, dim_out)
-        pullback_metric = torch.bmm(torch.bmm(jacobian.transpose(1,2), final_layer_metric_tensor), jacobian)
-        g[indx] = pullback_metric.detach().numpy()
+        jacobian = jacobian.detach().numpy()
+        g_pullback = np.einsum('lai,lbj,lab->lij', jacobian, jacobian, final_layer_metric_tensor)
+        g[indx] = g_pullback
         
         if plot_method == 'lattice':
             plot_lattice(ax, activations_np[indx], labels, xy_grid, g[indx], indx, N=N)    

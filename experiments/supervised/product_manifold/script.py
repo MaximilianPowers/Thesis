@@ -1,5 +1,6 @@
 import os
 from riemannian_geometry.computations.pullback_metric import pullback_metric_christoffel
+from riemannian_geometry.differential_geometry.curvature import scalar_curvature
 import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
 from sklearn.metrics import silhouette_score
@@ -9,7 +10,7 @@ import numpy as np
 from collections import deque
 import random
 import networkx as nx
-
+MIN_SAMPLES = 5
 
 def find_cycles_random_walk(graph, K_max, max_walk_length=100):
     cycles = []
@@ -95,7 +96,6 @@ def get_knn_graph(surface, max_K=20, verbose=False):
 
 
         G = nx.Graph()
-
         for u, nghbrs in knn_graph.items():
             for v in nghbrs:
                 G.add_edge(u, v)
@@ -151,7 +151,7 @@ import time
 
 def get_holonomy_group(surface, input_surface, input_metric, input_Christoffel_Normed, V, quantile, EPS=.1, MIN_SAMPLES=5, K_MAX=100000):
     
-    mask = V < np.quantile(np.abs(V), quantile)
+    mask = np.abs(V) < np.quantile(np.abs(V), quantile)
     start_loop_vectors = []
     loop_points = []
     pruned_map = {}
@@ -179,7 +179,8 @@ def get_holonomy_group(surface, input_surface, input_metric, input_Christoffel_N
         segment_indices[indx] = labels[indx]
     holonomy_manifold = []
     for cluster in range(n_clusters_):
-
+        if len(segment_surface[cluster]) < MIN_SAMPLES:
+            continue
         holonomy_group_cluster = []
         cluster_start_vectors = []
         cluster_loop_points = []
@@ -221,16 +222,16 @@ def main(model, X, N, sigma, quantile, EPS=.1, MIN_SAMPLES=5, K_MAX=100000, wrt=
     model.forward(X, save_activations=True)
     activations = model.get_activations()
     # In pullback_metric_christoffel, we force the Christoffel symbols to be normalised as we primarily care about the direction.
-    g, Christoffel_normed, surface = pullback_metric_christoffel(model, activations, N, wrt=wrt, method="manifold", sigma=sigma, normalised=False) 
+    g, Christoffel_normed, Ricci, surface = pullback_metric_christoffel(model, activations, N, wrt=wrt, method="manifold", sigma=sigma, normalised=False) 
     input_surface = surface[0]
     input_metric = g[0]
     input_Christoffel_Normed = Christoffel_normed[0]
     surface = surface[-1]
-    V = np.linalg.norm(input_metric, axis=(1,2), ord='fro')
+    V = np.abs(scalar_curvature(g_inv, Ricci))
     holonomy_manifold, start_loop_vectors, loop_points = get_holonomy_group(surface, input_surface, input_metric, input_Christoffel_Normed, V, quantile, EPS=EPS, MIN_SAMPLES=MIN_SAMPLES, K_MAX=K_MAX)
     return holonomy_manifold, start_loop_vectors, loop_points
 
-def _plot_holonomy_dist(holonomy_manifold, mode, size, wrt, epoch):
+def _plot_holonomy_dist(holonomy_manifold, wrt, save_path):
     N_clusters = len(holonomy_manifold)
     fig, ax = plt.subplots(1, N_clusters, figsize=(N_clusters*8, 8))
     plot_holonomy_manifold = np.array(holonomy_manifold)
@@ -243,12 +244,12 @@ def _plot_holonomy_dist(holonomy_manifold, mode, size, wrt, epoch):
         ax[i].set_title(f"Cluster {i} - Tol {tol} - Size {total_size}")
         ax[i].set_xlabel("Holonomy")
         ax[i].set_ylabel("Frequency")
-    if os.path.isdir(f"figures/{mode}/{size}/") == False:
-        os.makedirs(f"figures/{mode}/{size}")
-    plt.savefig(f"figures/{mode}/{size}/histogram_{wrt}_{epoch}.png")
+    if os.path.isdir(f"{save_path}") == False:
+        os.makedirs(f"{save_path}")
+    plt.savefig(f"{save_path}/histogram_{wrt}.png")
     plt.close()
 
-def _plot_holonomy_surface(holonomy_manifold, loop_points, X, labels, mode, size, wrt, epoch):
+def _plot_holonomy_surface(holonomy_manifold, loop_points, X, labels, wrt, save_path):
     N_clusters = len(holonomy_manifold)
     plot_holonomy_manifold = np.array(holonomy_manifold)
 
@@ -260,12 +261,12 @@ def _plot_holonomy_surface(holonomy_manifold, loop_points, X, labels, mode, size
     #color = plt.scatter(loop_points_plot[1][mask[1],0], loop_points_plot[1][mask[1],1], c=plot_holonomy_manifold[1,mask[1]], cmap="RdBu_r")
     plt.scatter(X[:,0], X[:,1], c=labels, cmap="viridis")
     plt.colorbar(color)
-    if os.path.isdir(f"figures/{mode}/{size}/") == False:
-        os.makedirs(f"figures/{mode}/{size}")
-    plt.savefig(f"figures/{mode}/{size}/surface_{wrt}_{epoch}.png")
+    if os.path.isdir(f"{save_path}") == False:
+        os.makedirs(f"{save_path}")
+    plt.savefig(f"{save_path}/surface_{wrt}.png")
     plt.close()
 
-def _plot_clusters(holonomy_manifold, loop_points, X, labels, mode, size, wrt, epoch):
+def _plot_clusters(holonomy_manifold, loop_points, X, labels, wrt, save_path):
     N_clusters = len(holonomy_manifold)
     loop_points_plot = np.array(loop_points)
     plot_unique = np.unique(loop_points_plot, axis=1)
@@ -275,7 +276,7 @@ def _plot_clusters(holonomy_manifold, loop_points, X, labels, mode, size, wrt, e
 
     plt.scatter(X[:,0], X[:,1], c=labels, cmap="RdBu_r")
     plt.legend(loc="upper right")
-    if os.path.isdir(f"figures/{mode}/{size}/") == False:
-        os.makedirs(f"figures/{mode}/{size}")
-    plt.savefig(f"figures/{mode}/{size}/clusters_{wrt}_{epoch}.png")
+    if os.path.isdir(f"{save_path}") == False:
+        os.makedirs(f"{save_path}")
+    plt.savefig(f"{save_path}/clusters_{wrt}.png")
     plt.close()

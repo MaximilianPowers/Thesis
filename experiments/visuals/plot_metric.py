@@ -23,7 +23,6 @@ def plot_riemann_metric(model, X, labels, epoch, save_path, sigma=0.05):
     fig, ax = plt.subplots(2, N_layers, figsize=(15*N_layers, 15))
 
     for indx, layer_out in enumerate(activations):
-        ax[0][indx].scatter(layer_out[:, 0], layer_out[:, 1], c=labels, edgecolors='k')
 
         manifold = LocalDiagPCA(layer_out, sigma=sigma, rho=1e-3)
         x_min, x_max = layer_out[:, 0].min() - .5, layer_out[:, 0].max() + .5
@@ -44,10 +43,8 @@ def plot_riemann_metric(model, X, labels, epoch, save_path, sigma=0.05):
         a, b = zip(*direction_metric)
         zeros = np.zeros(len(a))
 
-        ax[1][indx].scatter(layer_out[:, 0], layer_out[:, 1], c=labels, edgecolors='k')
         ax[1][indx].quiver(x, y, a, zeros, angles='xy', scale_units='xy', scale=1, color='r')
         ax[1][indx].quiver(x, y, zeros, b, angles='xy', scale_units='xy', scale=1, color='r')
-        ax[1][indx].set_title(f'Vector Direction - Layer {indx+1}')
 
 
         max_x, max_y = np.max(metric[:, 0]), np.max(metric[:, 1])
@@ -55,12 +52,17 @@ def plot_riemann_metric(model, X, labels, epoch, save_path, sigma=0.05):
         metric[:, 1] = metric[:, 1]/max_y*h # Scale by grid Euclidean volume
 
         a, b = zip(*metric)
-        
+        a = np.array(a)
+        b = np.array(b)
         # Creating the vector field visualization
-        ax[0][indx].quiver(x, y, a, b, angles='xy', scale_units='xy', scale=1, color='r')
+        ax[0][indx].quiver(x, y, a[:, 0], a[:, 1], angles='xy', scale_units='xy', scale=1, color='r')
+        ax[0][indx].quiver(x, y, b[:, 0], b[:, 1], angles='xy', scale_units='xy', scale=1, color='r')
+
+        ax[0][indx].scatter(layer_out[:, 0], layer_out[:, 1], c=labels, edgecolors='k')
+        ax[1][indx].scatter(layer_out[:, 0], layer_out[:, 1], c=labels, edgecolors='k')
+
         ax[0][indx].set_title(f'Vector Magnitude - Layer {indx+1}')
-
-
+        ax[1][indx].set_title(f'Vector Direction - Layer {indx+1}')
 
     fig.savefig(f"{save_path}/epoch_{epoch}.png")
     image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
