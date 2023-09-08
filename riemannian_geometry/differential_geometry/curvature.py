@@ -111,6 +111,7 @@ def vectorised_christoffel_symbols(g_inv, dg):
     Gamma: np.ndarray (D, D, D)
         Christoffel symbols
     """
+
     store_dg = np.triu(dg) # Store only the upper diagonal part of dg since 
 
     # Define the functions for A1, A2, and A3
@@ -164,6 +165,9 @@ def batch_vectorised_christoffel_symbols(g_inv, dg):
     Gamma: np.ndarray (N, D, D, D)
         Christoffel symbols
     """
+    if g_inv.shape[-1] == 1 and g_inv.shape[-1] == 1:
+        N = g_inv.shape[0]
+        return (dg.squeeze()*g_inv.squeeze()).reshape(N, 1, 1, 1)
     store_dg = np.triu(dg) # Store only the upper diagonal part of dg since 
 
     # Define the functions for A1, A2, and A3

@@ -166,6 +166,7 @@ def eigenvalue_result(input_, model, N, labels, save_path, wrt="layer_wise", sig
 
     activations = model.get_activations()
     activations_np = [a.detach().numpy() for a in activations]
+
     g, surface = pullback_metric(model, activations, N, wrt=wrt, method="manifold", sigma=sigma, normalised=True)
     eigenvalue_distribution(g, wrt=wrt, precision=precision, save_path=save_path)
     plot_rank(g, wrt=wrt, precision=precision, save_path=save_path)
@@ -193,12 +194,12 @@ def plot_rank_train(q_25, med, q_75, savepath, wrt="layer_wise"):
     plt.close(fig)
 
 
-def eigenvalue_results_large(input_, model, N, save_path, wrt="layer_wise", sigma=0.05, precision=7):
+def eigenvalue_results_large(input_, model, N, save_path, wrt="layer_wise", sigma=0.05, precision=7, sampling="manifold"):
     X = torch.from_numpy(input_).float()
     model.forward(X, save_activations=True)
 
     activations = model.get_activations()
-    g, _ = pullback_metric(model, activations, N, wrt=wrt, method="manifold", sigma=sigma, normalised=False)
+    g, _ = pullback_metric(model, activations, N, wrt=wrt, method=sampling, sigma=sigma, normalised=False)
     eigenvalue_distribution(g, wrt=wrt, precision=precision, save_path=save_path)
     q_25, med, q_75 = plot_rank(g, wrt=wrt, precision=precision, save_path=save_path)
     return q_25, med, q_75

@@ -2,17 +2,17 @@ import numpy as np
 from riemannian_geometry.computations.riemann_metric import LocalDiagPCA
 from utils.plotting.mesh import generate_lattice
 from utils.metrics.metrics import z_normalise
-from riemannian_geometry.computations.sample import generate_manifold_sample
+from riemannian_geometry.computations.sample import generate_manifold_sample, sample_points_heat_kernel
 from riemannian_geometry.differential_geometry.curvature import batch_curvature, batch_vectorised_christoffel_symbols
 import torch
 from torch.func import vmap, jacfwd, jacrev
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-def compute_batch_Christoffel(start, end, jacobian, Christoffel_ref):
+def batch_form_pullback(start, end, jacobian, form):
     jacobian_batch = jacobian[start:end]
-    Christoffel_batch = Christoffel_ref[start:end]
-    return np.einsum('lai,lbj,lck,labc->lijk', jacobian_batch, jacobian_batch, jacobian_batch, Christoffel_batch)
+    form_batch = form[start:end]
+    return np.einsum('lai,lbj,lck,labc->lijk', jacobian_batch, jacobian_batch, jacobian_batch, form_batch)
 
 def compute_jacobian_layer(model, X, layer_indx):
     dim_in = model.layers[layer_indx].in_features
@@ -239,10 +239,18 @@ def pullback_metric(model, activations, N=50, wrt="output_wise", method="lattice
         manifold_2 = LocalDiagPCA(activations_np[0], sigma=sigma, rho=1e-5)
         xy_grid = generate_manifold_sample(manifold_2, activations_np[0], N=N**2)
         del manifold_2
-
+        print(xy_grid.shape)
         surface_tensor = torch.from_numpy(xy_grid).float()
         model.forward(surface_tensor, save_activations=True)
         surfaces = model.get_activations() 
+        _xy_grids = [surface.detach().numpy() for surface in surfaces]
+        xy_grid = _xy_grids[-1]
+    elif method == "heat":
+        print(activations_np[0].shape)
+        xy_grid = sample_points_heat_kernel(activations_np[0], num_samples=N**2, connect_components=2, t=1/sigma)
+        surface_tensor = torch.from_numpy(xy_grid).float()
+        model.forward(surface_tensor, save_activations=True)
+        surfaces = model.get_activations()
         _xy_grids = [surface.detach().numpy() for surface in surfaces]
         xy_grid = _xy_grids[-1]
     else:
@@ -305,9 +313,7 @@ def pullback_holonomy(model, activations, N=20, sigma=0.05, method="manifold", w
 
     output_g, output_dg, output_ddg = manifold.metric_tensor(xy_grid.transpose(), nargout=3)
     _, output_Ricci, _ = batch_curvature(output_g, output_dg, output_ddg)
-    g_inv_ = np.linalg.inv(output_g)
-    output_Gamma = batch_vectorised_christoffel_symbols(g_inv_, output_dg)
-
+    
     start = time.time()
     dim_in = model.layers[0].in_features
     dim_out = model.layers[-1].out_features
@@ -334,7 +340,7 @@ def pullback_holonomy(model, activations, N=20, sigma=0.05, method="manifold", w
     start = time.time()
     n = g_pullback.shape[0]
     D = g_pullback.shape[1]
-    Gamma_batches = []
+    dg_batches = []
     batch_size = n // D
     n_batches = n // batch_size
     remainder = n % batch_size
@@ -343,18 +349,19 @@ def pullback_holonomy(model, activations, N=20, sigma=0.05, method="manifold", w
         for i in range(n_batches):
             start_idx = i * batch_size
             end_idx = (i + 1) * batch_size
-            future = executor.submit(compute_batch_Christoffel, start_idx, end_idx, jacobian, output_Gamma)
+            future = executor.submit(batch_form_pullback, start_idx, end_idx, jacobian, output_dg)
             futures.append(future)
         if remainder > 0:
             start_idx = n_batches * batch_size
             end_idx = n  # Go until the end to include the remainder
-            future = executor.submit(compute_batch_Christoffel, start_idx, end_idx, jacobian, output_Gamma)
+            future = executor.submit(batch_form_pullback, start_idx, end_idx, jacobian, output_dg)
             futures.append(future)
         for future in futures:
-            Gamma_batches.append(future.result())
-    Gamma = np.concatenate(Gamma_batches, axis=0)
+            dg_batches.append(future.result())
+    dg_pullback = np.concatenate(dg_batches, axis=0)
     end = time.time()
-    print("Pullback Christoffel computed in {} seconds".format(end-start))
+    print("Pullback differential computed in {} seconds".format(end-start))
+
     start = time.time()
     Ricci_pullback = np.einsum('Nai,Nbj,Nab->Nij', jacobian, jacobian, output_Ricci)
     end = time.time()
@@ -363,6 +370,6 @@ def pullback_holonomy(model, activations, N=20, sigma=0.05, method="manifold", w
     if normalised:
         g_pullback = z_normalise(g_pullback)
         Ricci_pullback = z_normalise(Ricci_pullback)
-    Gamma = z_normalise(Gamma)
+        dg_pullback = z_normalise(dg_pullback)
 
-    return jacobian, output_g, g_pullback, Ricci_pullback, Gamma, _xy_grids[0], _xy_grids[-1]
+    return g_pullback, dg_pullback, Ricci_pullback, xy_grid
