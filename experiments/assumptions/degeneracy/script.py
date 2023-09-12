@@ -3,7 +3,14 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from riemannian_geometry.computations.pullback_metric import pullback_metric
+from joblib import Parallel, delayed
+from scipy.linalg import eigh
 
+def compute_eigenvalues(matrix):
+    eigenvalues, _ = eigh(matrix)
+    return eigenvalues
+
+# Parallel computation of eigenvalues
 def degeneracy_plot(g, surface, activations_np, labels, save_path, wrt="layer_wise", precision=7):
     layers = len(g)
     fig, ax = plt.subplots(1, layers-1, figsize=(10*(layers-1), 10))
@@ -209,11 +216,12 @@ def rank_over_training(input_, model, N, wrt="layer_wise", sigma=0.05, precision
     model.forward(X, save_activations=True)
 
     activations = model.get_activations()
-    g, _ = pullback_metric(model, activations, N, wrt=wrt, method="manifold", sigma=sigma, normalised=False)
+    g, _ = pullback_metric(model, activations, N, wrt=wrt, method="heat", sigma=sigma, normalised=False)
   
     q_25, med, q_75 = [], [], []
     for layer_g in g[:-1]:
-        eigenvalues = np.linalg.eigvals(layer_g).real
+        eigenvalues = Parallel(n_jobs=-1)(delayed(compute_eigenvalues)(mat) for mat in layer_g)
+
         eigenvalues = np.round(eigenvalues, precision)
         ranks = np.sum(np.abs(eigenvalues) > 1e-5, axis=1)/np.shape(eigenvalues)[-1]
         q_25.append(np.quantile(ranks, 0.25))

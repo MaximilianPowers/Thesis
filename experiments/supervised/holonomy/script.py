@@ -1,3 +1,4 @@
+from torch import Tensor
 import os
 import matplotlib.pyplot as plt
 from torch import from_numpy
@@ -258,7 +259,10 @@ def main(model, dataset, N, sigma, quantile, tol, save_path, MIN_SIZE=None, wrt=
     if plot_hol or plot_graph or plot_group:
         if not os.path.exists(save_path):
             os.makedirs(save_path)
-    X = from_numpy(dataset.X).float()
+    if isinstance(dataset.X, Tensor):
+        X = dataset.X
+    else:
+        X = from_numpy(dataset.X).float()
     model.forward(X, save_activations=True)
     activations = model.get_activations()
     # In pullback_metric_christoffel, we force the Christoffel symbols to be normalised as we primarily care about the direction.

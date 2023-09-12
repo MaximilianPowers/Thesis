@@ -310,7 +310,10 @@ def flatness_metrics(model, dataset, N_points, save_path=None, wrt="layer_wise",
 
 def flatness_metrics_pullback(model, dataset, N_points, wrt="layer_wise", sigma=0.05):
     start_time = process_time()
-    X = torch.from_numpy(dataset.X).float()
+    if isinstance(dataset.X, torch.Tensor):
+        X = dataset.X
+    else:
+        X = torch.from_numpy(dataset.X).float()
     labels = dataset.y
     model.forward(X, save_activations=True)
     end_time = process_time()

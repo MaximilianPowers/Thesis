@@ -97,6 +97,13 @@ def pullback_ricci_tensor(model, activations, N=50, wrt="output_wise", method="l
         surfaces = model.get_activations()
         _xy_grids = [surface.detach().numpy() for surface in surfaces]
         xy_grid = _xy_grids[-1]
+    elif method == "heat":
+        xy_grid = sample_points_heat_kernel(activations_np[0], num_samples=N**2, connect_components=2, t=1/sigma)
+        surface_tensor = torch.from_numpy(xy_grid).float()
+        model.forward(surface_tensor, save_activations=True)
+        surfaces = model.get_activations()
+        _xy_grids = [surface.detach().numpy() for surface in surfaces]
+        xy_grid = _xy_grids[-1]
     else:
         raise ValueError("method must be either 'lattice' or 'manifold'")
     g_, dg_, ddg_ = manifold.metric_tensor(xy_grid.transpose(), nargout=3)
@@ -104,7 +111,7 @@ def pullback_ricci_tensor(model, activations, N=50, wrt="output_wise", method="l
 
     G = [0 for _ in activations_np]
     G[-1] = np.linalg.inv(g_) 
-
+    
     Ricci = [0 for _ in activations_np]
     Ricci[-1] = Ricci_
 
@@ -114,7 +121,7 @@ def pullback_ricci_tensor(model, activations, N=50, wrt="output_wise", method="l
         dim_in = model.layers[indx].in_features
         dim_out = model.layers[indx].out_features
         
-        if method == "manifold":
+        if method == "manifold" or method == "heat":
             xy_grid = _xy_grids[indx]
             xy_grid_tensor = torch.from_numpy(xy_grid).float()
 
@@ -246,7 +253,6 @@ def pullback_metric(model, activations, N=50, wrt="output_wise", method="lattice
         _xy_grids = [surface.detach().numpy() for surface in surfaces]
         xy_grid = _xy_grids[-1]
     elif method == "heat":
-        print(activations_np[0].shape)
         xy_grid = sample_points_heat_kernel(activations_np[0], num_samples=N**2, connect_components=2, t=1/sigma)
         surface_tensor = torch.from_numpy(xy_grid).float()
         model.forward(surface_tensor, save_activations=True)
@@ -268,7 +274,7 @@ def pullback_metric(model, activations, N=50, wrt="output_wise", method="lattice
     for indx in reversed(range(0, N_layers-1)):
         dim_in = model.layers[indx].in_features
         dim_out = model.layers[indx].out_features
-        if method == "manifold":
+        if method == "manifold" or method == "heat":
             xy_grid = _xy_grids[indx]
             xy_grid_tensor = torch.from_numpy(xy_grid).float()
 
@@ -301,9 +307,12 @@ def pullback_holonomy(model, activations, N=20, sigma=0.05, method="manifold", w
     manifold = LocalDiagPCA(activations_np[-1], sigma=sigma, rho=1e-5)
     
 
-    manifold_2 = LocalDiagPCA(activations_np[0], sigma=sigma, rho=1e-5)
-    xy_grid = generate_manifold_sample(manifold_2, activations_np[0], N=N**2)
-    del manifold_2
+    xy_grid = sample_points_heat_kernel(activations_np[0], num_samples=N**2, connect_components=2, t=1/sigma)
+    surface_tensor = torch.from_numpy(xy_grid).float()
+    model.forward(surface_tensor, save_activations=True)
+    surfaces = model.get_activations()
+    _xy_grids = [surface.detach().numpy() for surface in surfaces]
+    xy_grid = _xy_grids[-1]
 
     surface_tensor = torch.from_numpy(xy_grid).float()
     model.forward(surface_tensor, save_activations=True)

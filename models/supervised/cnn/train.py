@@ -63,11 +63,16 @@ def main(args):
     train_data, val_data = random_split(mnist_data, [n_train, n_val])
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=True)
-
     # Initialize the model
-    cnn_layers = [(1, 16, 3, 1), (16, 32, 3, 1)]
-    fc_layers = [(32 * 24 * 24, 128, nn.ReLU()), (128, 64, nn.ReLU())]
+    # Just one CNN layer with 4 output channels
+    input_shape = (28, 28)
+    cnn_layers = [(1, 4, 3, 1, input_shape)]
+    
+    # Just one fully connected layer with 32 neurons
     output_dim = 10
+
+    fc_layers = [(4 * 26 * 26, output_dim, nn.ReLU())]
+
     
     model = CNN(cnn_layers, fc_layers, output_dim).to(device)
     criterion = nn.NLLLoss()
@@ -98,7 +103,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_epochs', type=int, default=5, help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size')
-    parser.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate')
+    parser.add_argument('--learning_rate', type=float, default=0.005, help='Learning rate')
     parser.add_argument('--train_val_split', type=float, default=0.8, help='Train-Validation split ratio')
     parser.add_argument('--save_interval', type=int, default=5, help='Interval to save model state')
     parser.add_argument('--name', type=str, default="cnn_mnist", help='Name to save the model under')
